@@ -1,0 +1,13 @@
+.gradle/
+.kotlin/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+# Signing keys and their passwords never go in the repo
+*.jks
+*.keystore
+keystore.properties
+*.apk
+*.aab

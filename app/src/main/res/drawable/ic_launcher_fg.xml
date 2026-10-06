@@ -1,0 +1,12 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- DNS OTG: a shield (filtering) with a location pin (on the go / redirect locations).
+         Scaled 0.6 about the centre so it sits inside the adaptive-icon safe zone. -->
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.6" android:scaleY="0.6">
+        <path android:strokeColor="#2FD8A2" android:strokeWidth="6" android:strokeLineJoin="round"
+            android:pathData="M54,22 L80,32 L80,54 C80,70 68,81 54,86 C40,81 28,70 28,54 L28,32 Z" />
+        <path android:fillColor="#2FD8A2" android:fillType="evenOdd"
+            android:pathData="M54,38 C60.6,38 66,43.4 66,50 C66,59 54,70 54,70 C54,70 42,59 42,50 C42,43.4 47.4,38 54,38 Z M54,45.5 C51.5,45.5 49.5,47.5 49.5,50 C49.5,52.5 51.5,54.5 54,54.5 C56.5,54.5 58.5,52.5 58.5,50 C58.5,47.5 56.5,45.5 54,45.5 Z" />
+    </group>
+</vector>

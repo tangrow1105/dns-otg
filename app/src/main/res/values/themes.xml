@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.CDManager" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+    <color name="bg">#080B17</color>
+    <color name="icon_bg">#0B1022</color>
+    <color name="teal">#2FD8A2</color>
+</resources>

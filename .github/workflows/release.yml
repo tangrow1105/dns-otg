@@ -1,0 +1,73 @@
+# Builds the signed release APK into a GitHub release: a draft by default (install it from the
+# draft to check it, then press Publish), or published straight away with "publish" ticked.
+# Release notes come from .github/release-notes.md when it exists.
+name: Draft release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the release now instead of saving a draft
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Write signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then echo "::error::Signing secrets are missing"; exit 1; fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > "$RUNNER_TEMP/keystore.properties"
+          echo "DNSOTG_KEYSTORE_PROPS=$RUNNER_TEMP/keystore.properties" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Check it is signed with the release key
+        run: |
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | tee certs.txt
+          if grep -q "Android Debug" certs.txt; then echo "::error::Signed with the debug key"; exit 1; fi
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -1)
+          cp app/build/outputs/apk/release/app-release.apk "DNS-OTG-$version.apk"
+          gh release delete "v$version" --yes 2>/dev/null || true
+          # Older drafts (from test builds) go too, so only the new release is left.
+          for t in $(gh release list --json tagName,isDraft -q '.[] | select(.isDraft) | .tagName'); do gh release delete "$t" --yes || true; done
+          if [ -f .github/release-notes.md ]; then notes=(--notes-file .github/release-notes.md); else notes=(--generate-notes); fi
+          if [ "${{ inputs.publish }}" = "true" ]; then mode=(--latest); else mode=(--draft); fi
+          gh release create "v$version" "DNS-OTG-$version.apk" "${mode[@]}" --target "$GITHUB_SHA" \
+            --title "DNS OTG $version" "${notes[@]}"
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" "$RUNNER_TEMP/keystore.properties"
