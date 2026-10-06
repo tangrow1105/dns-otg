@@ -61,7 +61,7 @@ jobs:
         run: |
           version=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -1)
           cp app/build/outputs/apk/release/app-release.apk "DNS-OTG-$version.apk"
-          gh release delete "v$version" --yes 2>/dev/null || true
+          gh release delete "v$version" --yes --cleanup-tag 2>/dev/null || true
           # Older drafts (from test builds) go too, so only the new release is left.
           for t in $(gh release list --json tagName,isDraft -q '.[] | select(.isDraft) | .tagName'); do gh release delete "$t" --yes || true; done
           if [ -f .github/release-notes.md ]; then notes=(--notes-file .github/release-notes.md); else notes=(--generate-notes); fi
