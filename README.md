@@ -16,6 +16,12 @@
 </p>
 
 <p align="center">
+  <a href="https://tangrow1105.github.io/dns-otg/">Website</a> ·
+  <a href="../../releases/latest">Download</a> ·
+  <a href="https://tangrow1105.github.io/dns-otg/privacy.html">Privacy policy</a>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/01-profiles.jpg" width="200" alt="Profiles">
   <img src="docs/screenshots/02-filters.jpg" width="200" alt="Filters">
   <img src="docs/screenshots/06-statistics.jpg" width="200" alt="Statistics">
@@ -61,7 +67,7 @@ Updates install over the previous version and keep you signed in. Requires Andro
 
 - Your token is encrypted with the Android Keystore and never leaves your phone except to authenticate with Control D.
 - The app talks only to Control D's own servers. No analytics, no ads, no tracking, no servers of its own.
-- Full details in the [privacy policy](docs/privacy.html).
+- Full details in the [privacy policy](https://tangrow1105.github.io/dns-otg/privacy.html).
 
 ## Build
 
