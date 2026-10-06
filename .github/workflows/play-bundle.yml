@@ -1,12 +1,12 @@
-# Builds the signed Android App Bundle (.aab) for Google Play and keeps it as a workflow artifact
-# (Actions run page, Artifacts), not on the Releases page.
+# Builds the signed Android App Bundle (.aab) for Google Play. It is kept as a workflow artifact
+# (Actions run page, Artifacts) and in a draft release that only repo owners can see, never public.
 name: Play bundle
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   bundle:
@@ -54,12 +54,22 @@ jobs:
           version=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -1)
           code=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts | head -1)
           mkdir out && cp app/build/outputs/bundle/release/app-release.aab "out/DNS-OTG-$version-$code.aab"
+          echo "version=$version" >> "$GITHUB_ENV"; echo "code=$code" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         with:
           name: play-bundle
           path: out/*.aab
           retention-days: 30
+
+      - name: Save to a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="play-$code"
+          gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$tag" out/*.aab --draft --target "$GITHUB_SHA" \
+            --title "Play bundle $version ($code)" --notes "Signed bundle for Google Play. Draft only: not for public download."
 
       - name: Remove signing key
         if: always()

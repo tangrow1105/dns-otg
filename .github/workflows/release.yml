@@ -63,7 +63,7 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "DNS-OTG-$version.apk"
           gh release delete "v$version" --yes --cleanup-tag 2>/dev/null || true
           # Older drafts (from test builds) go too, so only the new release is left.
-          for t in $(gh release list --json tagName,isDraft -q '.[] | select(.isDraft) | .tagName'); do gh release delete "$t" --yes || true; done
+          for t in $(gh release list --json tagName,isDraft -q '.[] | select(.isDraft and (.tagName | startswith("play-") | not)) | .tagName'); do gh release delete "$t" --yes || true; done
           if [ -f .github/release-notes.md ]; then notes=(--notes-file .github/release-notes.md); else notes=(--generate-notes); fi
           if [ "${{ inputs.publish }}" = "true" ]; then mode=(--latest); else mode=(--draft); fi
           gh release create "v$version" "DNS-OTG-$version.apk" "${mode[@]}" --target "$GITHUB_SHA" \
