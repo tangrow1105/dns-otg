@@ -123,11 +123,12 @@ fun FloatingNavBar(items: List<NavItem>, selected: String?, fab: NavFab?, haze: 
     BoxWithConstraints(Modifier.fillMaxWidth().height(PillHeight + 8.dp), contentAlignment = Alignment.CenterStart) {
         // One width for every tab: centred when there's no action button, gliding left to make room for it.
         val pillWidth = (maxWidth - SideMargin * 2 - FabSize - FabGap).coerceAtMost(400.dp)
-        // With a button, pill and button form one group, centred (on a phone that's exactly the side margins),
-        // so on wide screens the button stays next to the pill instead of at the far edge.
-        val groupX = (maxWidth - pillWidth - FabGap - FabSize) / 2
+        // The pill stays centred whenever it clears the button at the right edge (wide screens); on a
+        // phone there's no room for both, so it slides left to make space.
+        val centredX = (maxWidth - pillWidth) / 2
+        val fitsCentred = centredX + pillWidth + FabGap <= maxWidth - SideMargin - FabSize
         val pillX by animateDpAsState(
-            if (fab != null) groupX else (maxWidth - pillWidth) / 2,
+            if (fab != null && !fitsCentred) SideMargin else centredX,
             spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
             label = "pillX",
         )
@@ -194,7 +195,7 @@ fun FloatingNavBar(items: List<NavItem>, selected: String?, fab: NavFab?, haze: 
             visible = fab != null,
             enter = scaleIn(spring(dampingRatio = Spring.DampingRatioLowBouncy)) + fadeIn(),
             exit = scaleOut(tween(150)) + fadeOut(tween(150)),
-            modifier = Modifier.align(Alignment.CenterStart).offset(x = groupX + pillWidth + FabGap),
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = SideMargin),
         ) {
             // Keep the last action while it animates out.
             var last by remember { mutableStateOf(fab) }

@@ -9,6 +9,6 @@
 - Activity log: changing a filter, search or time range jumps back to the top of the list
 - Statistics: the profile and endpoint filters stay pinned at the top, like in the Activity log
 - Artificial Intelligence filter shows its own icon
-- On wide screens the + button stays next to the navigation bar
+- On wide screens the navigation bar stays centred, with the + button at the edge
 
 Not affiliated with Control D.
