@@ -18,6 +18,7 @@
 <p align="center">
   <a href="https://tangrow1105.github.io/dns-otg/">Website</a> ·
   <a href="../../releases/latest">Download</a> ·
+  <a href="#help-test-on-google-play">Test on Google Play</a> ·
   <a href="https://tangrow1105.github.io/dns-otg/privacy.html">Privacy policy</a>
 </p>
 
@@ -56,6 +57,16 @@
 3. Sign in.
 
 Updates install over the previous version and keep you signed in. Requires Android 8.0 or newer.
+
+## Help test on Google Play
+
+DNS On The Go is in closed testing on Google Play and needs testers before it can go public. To join:
+
+1. Join the Google Group **[groups.google.com/g/dns-otg](https://groups.google.com/g/dns-otg)** with the Google account you use on your phone.
+2. Open **[play.google.com/apps/testing/app.dnsotg](https://play.google.com/apps/testing/app.dnsotg)** and tap **Become a tester**.
+3. Install the app from **[Google Play](https://play.google.com/store/apps/details?id=app.dnsotg)** and keep it installed for at least 14 days.
+
+You don't need a Control D account to help: installing and keeping the app is enough. If you already have the GitHub version, uninstall it first, because the two are signed differently.
 
 ## Signing in
 
