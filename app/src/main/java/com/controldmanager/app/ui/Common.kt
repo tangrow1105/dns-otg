@@ -224,11 +224,12 @@ class Loader<T>(private val scope: CoroutineScope, private val block: suspend ()
 
 /**
  * Fade at the top edge (under the header) once the content inside has scrolled, so it fades out as it
- * goes up instead of being cut off. The scroll amount comes from the content's nested scroll.
+ * goes up instead of being cut off. Pass [isScrolled] when the list state is at hand; otherwise the
+ * scroll amount comes from the content's nested scroll, saved so it survives leaving and coming back.
  */
 @Composable
-fun TopScrollFade(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    var scrolled by remember { mutableFloatStateOf(0f) }
+fun TopScrollFade(modifier: Modifier = Modifier, isScrolled: (() -> Boolean)? = null, content: @Composable () -> Unit) {
+    var scrolled by androidx.compose.runtime.saveable.rememberSaveable { mutableFloatStateOf(0f) }
     val track = remember {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
@@ -237,7 +238,8 @@ fun TopScrollFade(modifier: Modifier = Modifier, content: @Composable () -> Unit
             }
         }
     }
-    val fade by androidx.compose.animation.core.animateFloatAsState(if (scrolled > 4f) 1f else 0f, label = "topFade")
+    val show = if (isScrolled != null) isScrolled() else scrolled > 4f
+    val fade by androidx.compose.animation.core.animateFloatAsState(if (show) 1f else 0f, label = "topFade")
     Box(modifier.fillMaxSize().nestedScroll(track)) {
         content()
         if (fade > 0f) Box(

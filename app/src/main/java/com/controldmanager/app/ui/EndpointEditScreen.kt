@@ -434,7 +434,7 @@ fun EndpointResolversScreen(nav: NavHostController, id: String) {
     ) { pad ->
         LoaderBox(loader, Modifier.padding(pad)) { d ->
             val r = d.resolvers
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).padding(bottom = ActionBarSpace), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                     DeviceGlyph(d.icon, 22)
                     Spacer(Modifier.width(10.dp))

@@ -1,19 +1,13 @@
-The first public release of DNS On The Go, an unofficial Android app to manage your Control D DNS on the go.
+**Install:** download `DNS-OTG-1.0.1.apk` below and open it on your phone (Android 8.0 or newer). It updates 1.0.0 in place and keeps you signed in.
 
-**Install:** download `DNS-OTG-1.0.0.apk` below and open it on your phone (Android 8.0 or newer). If you tested an earlier build, this one updates it in place.
+### New
+- The app tells you when a new version is out on GitHub (Preferences shows a download link). Copies from Google Play are updated by Play instead.
 
-### Highlights
-- A new rounded icon set across the whole app (Solar), with fresh icons for every filter, option and endpoint type
-- Default Location warns when you change it on a profile this phone isn't using
-- Text fields stay visible above the keyboard
-- Renaming a profile shows a spinner while it saves
-- The sign-in screen only offers clipboard text that looks like a Control D API token
-
-### What the app does
-- **Profiles:** filters, services, custom rules and folders, profile options, Default Rule and Default Location
-- **Endpoints:** devices with last activity, resolvers, clients and known IPs
-- **Statistics:** blocked, bypassed and redirected totals, security overview, charts, trends and top lists
-- **Activity log:** live DNS queries with filters, details and one-tap rules
-- **Account:** billing, receipts, account settings and a status check
+### Fixed
+- Endpoint resolvers: the last address no longer hides behind the Help Me Configure button
+- The fade under the header now shows right away when you come back to a scrolled list
+- Activity log: changing a filter, search or time range jumps back to the top of the list
+- Statistics: the profile and endpoint filters stay pinned at the top, like in the Activity log
+- Artificial Intelligence filter shows its own icon
 
 Not affiliated with Control D.

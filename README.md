@@ -67,6 +67,7 @@ Updates install over the previous version and keep you signed in. Requires Andro
 
 - Your token is encrypted with the Android Keystore and never leaves your phone except to authenticate with Control D.
 - The app talks only to Control D's own servers. No analytics, no ads, no tracking, no servers of its own.
+- The GitHub version also checks GitHub Releases for updates and shows a download link when a new version is out. The Google Play version leaves updates to Play.
 - Full details in the [privacy policy](https://tangrow1105.github.io/dns-otg/privacy.html).
 
 ## Build

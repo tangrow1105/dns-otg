@@ -305,6 +305,46 @@ private fun StatisticsView(region: String, range: TimeRange, onRefresh: () -> Un
         coroutineScope { fields.map { f -> async { runCatching { api.statBy(region, range, scope, f) }.getOrDefault(emptyList()) } }.map { it.await() } }
     }
 
+    // Profile / endpoint filters stay pinned above the scrolling stats, like the Activity log's filters.
+    Column {
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CdChip(
+                onClick = { pick = "profile" },
+                label = { Text(profile?.name ?: "All Profiles", maxLines = 1) },
+                leadingIcon = { Icon(Solar.Tuning, null, Modifier.size(18.dp)) },
+                trailingIcon = { Icon(Solar.ExpandMore, null, Modifier.size(18.dp)) },
+            )
+            CdChip(
+                onClick = { pick = "endpoint" },
+                label = { Text(endpoint?.name ?: "All Endpoints", maxLines = 1) },
+                leadingIcon = {
+                    val e = endpoint
+                    if (e != null) DeviceGlyph(e.icon, 18) else Icon(Solar.Devices, null, Modifier.size(18.dp))
+                },
+                trailingIcon = { Icon(Solar.ExpandMore, null, Modifier.size(18.dp)) },
+            )
+        }
+        actionTabs.firstOrNull { it.first == refine }?.let { (act, label) ->
+            Spacer(Modifier.height(6.dp))
+            val c = statColor(act)
+            CdChip(
+                selected = true, onClick = { refine = null }, color = c,
+                label = { Text(label) },
+                leadingIcon = { StatGlyph("stat-" + label.lowercase(), 16, c) },
+                trailingIcon = { Icon(Solar.Close, "Remove refinement", Modifier.size(16.dp)) },
+            )
+        }
+        protocols.firstOrNull { it.first == protocol }?.let { (_, label, icon) ->
+            Spacer(Modifier.height(6.dp))
+            CdChip(
+                selected = true, onClick = { protocol = null },
+                label = { Text(label) },
+                leadingIcon = { StatGlyph(icon, 16, Palette.Teal) },
+                trailingIcon = { Icon(Solar.Close, "Remove refinement", Modifier.size(16.dp)) },
+            )
+        }
+    }
     LoaderBox(overview, onRefresh = onRefresh) { o ->
         val totals = remember(o.series) {
             val t = mutableMapOf<Int, Long>()
@@ -314,44 +354,6 @@ private fun StatisticsView(region: String, range: TimeRange, onRefresh: () -> Un
         val total = totals.values.sum()
         val blocked = totals[Do.BLOCK] ?: 0
         LazyColumn(contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 32.dp + LocalBottomBarSpace.current), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CdChip(
-                        onClick = { pick = "profile" },
-                        label = { Text(profile?.name ?: "All Profiles", maxLines = 1) },
-                        leadingIcon = { Icon(Solar.Tuning, null, Modifier.size(18.dp)) },
-                        trailingIcon = { Icon(Solar.ExpandMore, null, Modifier.size(18.dp)) },
-                    )
-                    CdChip(
-                        onClick = { pick = "endpoint" },
-                        label = { Text(endpoint?.name ?: "All Endpoints", maxLines = 1) },
-                        leadingIcon = {
-                            val e = endpoint
-                            if (e != null) DeviceGlyph(e.icon, 18) else Icon(Solar.Devices, null, Modifier.size(18.dp))
-                        },
-                        trailingIcon = { Icon(Solar.ExpandMore, null, Modifier.size(18.dp)) },
-                    )
-                }
-                actionTabs.firstOrNull { it.first == refine }?.let { (act, label) ->
-                    Spacer(Modifier.height(6.dp))
-                    val c = statColor(act)
-                    CdChip(
-                        selected = true, onClick = { refine = null }, color = c,
-                        label = { Text(label) },
-                        leadingIcon = { StatGlyph("stat-" + label.lowercase(), 16, c) },
-                        trailingIcon = { Icon(Solar.Close, "Remove refinement", Modifier.size(16.dp)) },
-                    )
-                }
-                protocols.firstOrNull { it.first == protocol }?.let { (_, label, icon) ->
-                    Spacer(Modifier.height(6.dp))
-                    CdChip(
-                        selected = true, onClick = { protocol = null },
-                        label = { Text(label) },
-                        leadingIcon = { StatGlyph(icon, 16, Palette.Teal) },
-                        trailingIcon = { Icon(Solar.Close, "Remove refinement", Modifier.size(16.dp)) },
-                    )
-                }
-            }
             item {
                 FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxItemsInEachRow = 2) {
                     // Tapping an action tile refines the whole page to that action (tap again to clear), as on the dashboard.
@@ -467,6 +469,7 @@ private fun StatisticsView(region: String, range: TimeRange, onRefresh: () -> Un
                 }
             }
         }
+    }
     }
 
     when (pick) {
@@ -982,7 +985,12 @@ private fun ActivityLogView(
         } }
     }
 
-    LaunchedEffect(region, range, query) { loadNext() }
+    // A new filter, search or time range starts the list from the top (not on first show or coming back).
+    val firstLoad = remember { booleanArrayOf(true) }
+    LaunchedEffect(region, range, query) {
+        if (firstLoad[0]) firstLoad[0] = false else listState.scrollToItem(0)
+        loadNext()
+    }
     val nearEnd by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 } }
     LaunchedEffect(nearEnd, entries.size) {
         if (entries.isNotEmpty() && nearEnd >= entries.size - 5) loadNext()
@@ -1074,7 +1082,7 @@ private fun ActivityLogView(
             else -> androidx.compose.material3.pulltorefresh.PullToRefreshBox(
                 isRefreshing = loading && entries.isEmpty(), onRefresh = onRefresh, modifier = Modifier.fillMaxSize(),
             ) {
-                TopScrollFade {
+                TopScrollFade(isScrolled = { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }) {
                 LazyColumn(state = listState, contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp + LocalBottomBarSpace.current), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (entries.isEmpty()) item { EmptyState(Solar.Sad, "No queries match your search criteria") }
                     items(entries.size) { i ->

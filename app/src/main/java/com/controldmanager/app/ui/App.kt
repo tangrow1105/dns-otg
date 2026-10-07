@@ -92,6 +92,17 @@ private fun MainScaffold(onLogout: () -> Unit) {
     val searchHost = remember { SearchHostState() }
     val dialogHost = remember { DialogHostState() }
     DisposableEffect(snackbar) { AppToast.host = snackbar; onDispose { if (AppToast.host === snackbar) AppToast.host = null } }
+    // GitHub installs: mention a newer release once per version (it also stays listed in Preferences).
+    val updCtx = LocalContext.current
+    val updUri = LocalUriHandler.current
+    LaunchedEffect(Unit) {
+        val r = AppUpdates.check(updCtx) ?: return@LaunchedEffect
+        val seen = updCtx.getSharedPreferences("controldmanager_ui", android.content.Context.MODE_PRIVATE)
+        if (seen.getString("update_toast_for", null) == r.version) return@LaunchedEffect
+        seen.edit().putString("update_toast_for", r.version).apply()
+        val res = snackbar.showSnackbar("DNS OTG ${r.version} is available", actionLabel = "Download", duration = SnackbarDuration.Long)
+        if (res == SnackbarResult.ActionPerformed) runCatching { updUri.openUri(r.downloadUrl) }
+    }
     val onTab = tabs.any { it.route == route }
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
@@ -389,6 +400,15 @@ private fun AccountScreen(nav: NavHostController, onLogout: () -> Unit) {
         TopAppBar(title = { Text("Preferences", fontWeight = FontWeight.SemiBold) }, colors = cdTopBarColors())
         TopScrollFade {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+            LaunchedEffect(Unit) { AppUpdates.check(ctx) }
+            AppUpdates.available?.let { r ->
+                SectionHeader("Update")
+                GroupRow(
+                    "DNS OTG ${r.version} is available", first = true, last = true, subtitle = "Download the new version from GitHub", fill = Palette.Card,
+                    icon = { Icon(Solar.FileDownload, null, tint = Palette.Teal) },
+                    trailing = { Icon(Solar.OpenInNew, null, tint = Palette.Muted) },
+                ) { uri.openUri(r.downloadUrl) }
+            }
             SectionHeader("Settings")
             GroupRow(
                 "Account", first = true, last = false, subtitle = "Email, password, passkeys, analytics storage", fill = Palette.Card,
