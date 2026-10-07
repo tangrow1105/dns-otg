@@ -96,7 +96,7 @@ private fun MainScaffold(onLogout: () -> Unit) {
     val updCtx = LocalContext.current
     val updUri = LocalUriHandler.current
     LaunchedEffect(Unit) {
-        val r = AppUpdates.check(updCtx) ?: return@LaunchedEffect
+        val r = AppUpdates.check(updCtx).release ?: return@LaunchedEffect
         val seen = updCtx.getSharedPreferences("controldmanager_ui", android.content.Context.MODE_PRIVATE)
         if (seen.getString("update_toast_for", null) == r.version) return@LaunchedEffect
         seen.edit().putString("update_toast_for", r.version).apply()
@@ -425,11 +425,31 @@ private fun AccountScreen(nav: NavHostController, onLogout: () -> Unit) {
                 icon = { Icon(Solar.Key, null, tint = Palette.Teal) },
                 trailing = { Icon(Solar.OpenInNew, null, tint = Palette.Muted) },
             ) { uri.openUri("https://controld.com/dashboard/api") }
+            val updScope = rememberCoroutineScope()
+            val canCheck = remember { AppUpdates.enabled(ctx) }
+            val appVersion = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull().orEmpty() }
             GroupRow(
-                "Documentation", first = false, last = true, subtitle = "docs.controld.com", fill = Palette.Card,
+                "Documentation", first = false, last = !canCheck, subtitle = "docs.controld.com", fill = Palette.Card,
                 icon = { Icon(Solar.MenuBook, null, tint = Palette.Teal) },
                 trailing = { Icon(Solar.OpenInNew, null, tint = Palette.Muted) },
             ) { uri.openUri("https://docs.controld.com/docs/getting-started") }
+            // GitHub installs only: Play keeps its own installs up to date.
+            if (canCheck) GroupRow(
+                "Check for updates", first = false, last = true, subtitle = "You have version $appVersion", fill = Palette.Card,
+                icon = { Icon(Solar.Refresh, null, tint = Palette.Teal) },
+                trailing = {
+                    if (AppUpdates.checking) CircularProgressIndicator(Modifier.size(20.dp), color = Palette.Teal, strokeWidth = 2.dp)
+                },
+            ) {
+                updScope.launch {
+                    val res = AppUpdates.check(ctx, force = true)
+                    showToast(ctx, when {
+                        res.release != null -> "DNS OTG ${res.release.version} is available"
+                        res.failed -> "Couldn't reach GitHub. Try again later."
+                        else -> "You're on the latest version"
+                    })
+                }
+            }
 
             SectionHeader("Appearance")
             SlideSelector(

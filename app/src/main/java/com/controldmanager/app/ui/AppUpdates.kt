@@ -29,6 +29,10 @@ object AppUpdates {
     var available by mutableStateOf<Release?>(null)
         private set
 
+    /** True while a check is running (for the spinner in Preferences). */
+    var checking by mutableStateOf(false)
+        private set
+
     fun enabled(ctx: Context) = !ctx.packageName.endsWith(".debug") && !installedFromPlay(ctx)
 
     private fun installedFromPlay(ctx: Context): Boolean {
@@ -40,12 +44,19 @@ object AppUpdates {
         return installer == "com.android.vending"
     }
 
-    /** Checks once per app run; returns the newer release or null (also on any network error). */
-    suspend fun check(ctx: Context): Release? {
-        if (checked || !enabled(ctx)) return available
+    /**
+     * Checks once per app start, or again when [force]d (the Preferences button). Returns the newer
+     * release or null; [Result.failed] is true when GitHub couldn't be reached.
+     */
+    data class Result(val release: Release?, val failed: Boolean)
+
+    suspend fun check(ctx: Context, force: Boolean = false): Result {
+        if ((checked && !force) || !enabled(ctx) || checking) return Result(available, false)
         checked = true
-        val installed = runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: return null
-        val latest = withContext(Dispatchers.IO) {
+        val installed = runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull()
+            ?: return Result(null, true)
+        checking = true
+        val latest = try { withContext(Dispatchers.IO) {
             runCatching {
                 val req = Request.Builder().url(LATEST).header("Accept", "application/vnd.github+json").build()
                 http.newCall(req).execute().use { r ->
@@ -57,9 +68,10 @@ object AppUpdates {
                     Release(o.optString("tag_name").removePrefix("v"), o.optString("html_url"), apk?.ifBlank { null })
                 }
             }.getOrNull()
-        }
-        available = latest?.takeIf { it.version.isNotBlank() && isNewer(it.version, installed) }
-        return available
+        } } finally { checking = false }
+        if (latest == null) return Result(available, true)
+        available = latest.takeIf { it.version.isNotBlank() && isNewer(it.version, installed) }
+        return Result(available, false)
     }
 
     /** Compares dotted versions number by number (1.0.10 > 1.0.9); anything after "-" is ignored. */
