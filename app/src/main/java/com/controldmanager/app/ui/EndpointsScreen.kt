@@ -92,9 +92,10 @@ fun EndpointsScreen(nav: NavHostController) {
         },
         contentWindowInsets = WindowInsets(0),
     ) { pad ->
-        LoaderBox(loader, Modifier.padding(pad)) { devices ->
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+        LoaderBox(loader, Modifier.padding(pad), isScrolled = { listState.isScrolledDown() }) { devices ->
             val list = devices.filter { q.isBlank() || it.name.contains(q, true) || it.profile?.name?.contains(q, true) == true }
-            LazyColumn(contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 16.dp + LocalBottomBarSpace.current), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(state = listState, contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 16.dp + LocalBottomBarSpace.current), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (list.isEmpty()) item { EmptyState(Solar.Devices, "No endpoints") }
                 items(list, key = { it.pk }) { d ->
                     val isCurrent = d.pk == current.data

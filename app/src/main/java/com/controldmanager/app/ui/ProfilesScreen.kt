@@ -111,10 +111,11 @@ fun ProfilesScreen(nav: NavHostController) {
         },
         contentWindowInsets = WindowInsets(0),
     ) { pad ->
-        LoaderBox(loader, Modifier.padding(pad)) { (profiles, devices) ->
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+        LoaderBox(loader, Modifier.padding(pad), isScrolled = { listState.isScrolledDown() }) { (profiles, devices) ->
             val sorted = if (sort == SORT_UPDATED) profiles.sortedByDescending { it.updated }
             else profiles.sortedBy { it.name.lowercase() }
-            LazyColumn(contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 16.dp + LocalBottomBarSpace.current), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyColumn(state = listState, contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 16.dp + LocalBottomBarSpace.current), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (sorted.isEmpty()) item { EmptyState(Solar.Tuning, "No profiles yet. Tap + to create one.") }
                 val currentDevice = devices.firstOrNull { it.pk == current.data }
                 items(sorted, key = { it.pk }) { p ->

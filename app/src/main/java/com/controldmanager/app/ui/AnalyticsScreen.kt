@@ -345,7 +345,8 @@ private fun StatisticsView(region: String, range: TimeRange, onRefresh: () -> Un
             )
         }
     }
-    LoaderBox(overview, onRefresh = onRefresh) { o ->
+    val statsList = androidx.compose.foundation.lazy.rememberLazyListState()
+    LoaderBox(overview, onRefresh = onRefresh, isScrolled = { statsList.isScrolledDown() }) { o ->
         val totals = remember(o.series) {
             val t = mutableMapOf<Int, Long>()
             o.series.forEach { p -> p.counts.forEach { (a, c) -> t[a] = (t[a] ?: 0) + c } }
@@ -353,7 +354,7 @@ private fun StatisticsView(region: String, range: TimeRange, onRefresh: () -> Un
         }
         val total = totals.values.sum()
         val blocked = totals[Do.BLOCK] ?: 0
-        LazyColumn(contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 32.dp + LocalBottomBarSpace.current), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(state = statsList, contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 32.dp + LocalBottomBarSpace.current), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxItemsInEachRow = 2) {
                     // Tapping an action tile refines the whole page to that action (tap again to clear), as on the dashboard.
@@ -1082,7 +1083,7 @@ private fun ActivityLogView(
             else -> androidx.compose.material3.pulltorefresh.PullToRefreshBox(
                 isRefreshing = loading && entries.isEmpty(), onRefresh = onRefresh, modifier = Modifier.fillMaxSize(),
             ) {
-                TopScrollFade(isScrolled = { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }) {
+                TopScrollFade(isScrolled = { listState.isScrolledDown() }) {
                 LazyColumn(state = listState, contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp + LocalBottomBarSpace.current), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (entries.isEmpty()) item { EmptyState(Solar.Sad, "No queries match your search criteria") }
                     items(entries.size) { i ->

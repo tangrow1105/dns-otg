@@ -233,8 +233,15 @@ fun TopScrollFade(modifier: Modifier = Modifier, isScrolled: (() -> Boolean)? = 
     val track = remember {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
-                scrolled = (scrolled - consumed.y).coerceAtLeast(0f)
+                // Scroll left over in the downward direction means the content is already at its top edge,
+                // so reset outright: the running total can drift (e.g. after coming back to a screen).
+                scrolled = if (available.y > 0f) 0f else (scrolled - consumed.y).coerceAtLeast(0f)
                 return androidx.compose.ui.geometry.Offset.Zero
+            }
+
+            override suspend fun onPostFling(consumed: androidx.compose.ui.unit.Velocity, available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                if (available.y > 0f) scrolled = 0f   // a fling that ran into the top edge
+                return androidx.compose.ui.unit.Velocity.Zero
             }
         }
     }
@@ -248,6 +255,9 @@ fun TopScrollFade(modifier: Modifier = Modifier, isScrolled: (() -> Boolean)? = 
         )
     }
 }
+
+/** True once the list has moved away from its very top. */
+fun androidx.compose.foundation.lazy.LazyListState.isScrolledDown() = firstVisibleItemIndex > 0 || firstVisibleItemScrollOffset > 0
 
 /** Current time in seconds, ticking every second, so "7s"/"3m" ages count up live. */
 val LocalNowSec = compositionLocalOf { System.currentTimeMillis() / 1000 }
@@ -325,6 +335,8 @@ fun <T> LoaderBox(
     modifier: Modifier = Modifier,
     /** Pull-to-refresh action; defaults to reloading [loader]. */
     onRefresh: (() -> Unit)? = null,
+    /** Exact "content is scrolled" check for the top fade, when the screen has its list state. */
+    isScrolled: (() -> Boolean)? = null,
     content: @Composable (T) -> Unit,
 ) {
     val data = loader.data
@@ -334,7 +346,7 @@ fun <T> LoaderBox(
             onRefresh = { onRefresh?.invoke() ?: loader.reload() },
             modifier = modifier.fillMaxSize(),
         ) {
-            TopScrollFade { content(data) }
+            TopScrollFade(isScrolled = isScrolled) { content(data) }
         }
 
         loader.error != null -> ErrorState(loader.error!!, modifier) { loader.reload() }
