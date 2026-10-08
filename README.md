@@ -39,9 +39,9 @@
 
 **Activity log.** Live DNS queries with filters for endpoint, client, action, protocol and more. Open any query for details, or turn it into a rule with one tap.
 
-**Domain Test.** Check how any endpoint answers a domain (blocked, bypassed or redirected, and by which filter, service or rule), and report false positives or negatives to Control D.
+**Domain Test.** Check how any endpoint answers a domain (blocked, bypassed or redirected, and by which filter, service or rule).
 
-**Account.** Billing and receipts, account settings, Control D notifications and changelog, and the same status check as controld.com/status.
+**Account.** Billing and receipts, account settings, Control D's changelog, and the same status check as controld.com/status.
 
 <table>
   <tr>

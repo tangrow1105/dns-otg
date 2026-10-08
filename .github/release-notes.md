@@ -2,8 +2,6 @@
 
 ### New
 - **Domain Test** (Analytics, shield button): check whether a domain is blocked, bypassed or redirected for any endpoint, and why. Test queries stay out of your logs.
-- **Report False Positive / False Negative** from Domain Test, with the option to add a Bypass rule right away
-- **Notifications** from Control D (bell in Preferences), with a badge for new ones
 - **Control D changelog** in Preferences: the latest Control D version, linking to its changelog
 
 ### Improved
