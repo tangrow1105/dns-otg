@@ -127,6 +127,7 @@ private fun MainScaffold(onLogout: () -> Unit) {
             composable("account") { AccountScreen(nav, onLogout) }
             composable("billing") { BillingScreen(nav) }
             composable("domain-test") { DomainTestScreen(nav) }
+            composable("notifications") { NotificationsScreen(nav) }
             composable("account-settings") { AccountSettingsScreen(nav) }
             composable("profile/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
                 ProfileScreen(nav, it.arguments!!.getString("id")!!)
@@ -398,7 +399,11 @@ private fun AccountScreen(nav: NavHostController, onLogout: () -> Unit) {
     var confirmLogout by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("Preferences", fontWeight = FontWeight.SemiBold) }, colors = cdTopBarColors())
+        TopAppBar(
+            title = { Text("Preferences", fontWeight = FontWeight.SemiBold) },
+            actions = { NotificationsButton { nav.navigate("notifications") } },
+            colors = cdTopBarColors(),
+        )
         TopScrollFade {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
             LaunchedEffect(Unit) { AppUpdates.check(ctx) }
@@ -430,10 +435,20 @@ private fun AccountScreen(nav: NavHostController, onLogout: () -> Unit) {
             val canCheck = remember { AppUpdates.enabled(ctx) }
             val appVersion = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull().orEmpty() }
             GroupRow(
-                "Documentation", first = false, last = !canCheck, subtitle = "docs.controld.com", fill = Palette.Card,
+                "Documentation", first = false, last = false, subtitle = "docs.controld.com", fill = Palette.Card,
                 icon = { Icon(Solar.MenuBook, null, tint = Palette.Teal) },
                 trailing = { Icon(Solar.OpenInNew, null, tint = Palette.Muted) },
             ) { uri.openUri("https://docs.controld.com/docs/getting-started") }
+            // Control D's latest release (public changelog feed); opens their changelog.
+            val release = rememberLoader { runCatching { session.api.latestRelease() }.getOrNull() }
+            GroupRow(
+                release.data?.let { "Control D ${it.version}" } ?: "Control D changelog", first = false, last = !canCheck,
+                subtitle = release.data?.date?.let { "Updated " + java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy").format(java.time.Instant.ofEpochSecond(it).atZone(java.time.ZoneId.systemDefault())) }
+                    ?: "What's new in Control D",
+                fill = Palette.Card,
+                icon = { Icon(Solar.Stars, null, tint = Palette.Teal) },
+                trailing = { Icon(Solar.OpenInNew, null, tint = Palette.Muted) },
+            ) { uri.openUri("https://docs.controld.com/changelog") }
             // GitHub installs only: Play keeps its own installs up to date.
             if (canCheck) GroupRow(
                 "Check for updates", first = false, last = true, subtitle = "You have version $appVersion", fill = Palette.Card,

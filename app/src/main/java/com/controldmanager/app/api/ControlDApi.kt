@@ -50,7 +50,10 @@ class ControlDApi(private val token: String, private val orgId: String?) {
             }.orEmpty()
             val v = o.optJSONObject("controld")?.optJSONObject("verdict")
             val verdict = v?.optString("verdictAction")?.takeIf { it.isNotEmpty() }?.let { action ->
-                DomainVerdict(v.optString("verdictSource"), action, v.optString("verdictMatch"), v.optString("verdictVia").ifBlank { null })
+                DomainVerdict(
+                    v.optString("verdictSource"), action, v.optString("verdictMatch"),
+                    v.optString("verdictVia").ifBlank { null }, v.optString("profileID").ifBlank { null },
+                )
             }
             DomainTestResult(
                 domain = o.optString("QNAME", domain).removeSuffix("."),
@@ -59,6 +62,48 @@ class ControlDApi(private val token: String, private val orgId: String?) {
                 answers = answers,
                 verdict = verdict,
             )
+        }
+    }
+
+    /**
+     * Sends a Domain Test report to Control D's team (they don't change any profile). One domain goes as a
+     * single object, 2-50 as {"reports": [...]}, and the batch reply must accept every one.
+     */
+    suspend fun reportDomains(falsePositive: Boolean, domains: List<String>, filter: String, message: String) {
+        val items = domains.map { JSONObject().put("hostname", it).put("filter", filter).put("message", message) }
+        val payload = if (items.size == 1) items[0] else JSONObject().put("reports", org.json.JSONArray(items))
+        val body = call("POST", if (falsePositive) "/support/false-positive" else "/support/false-negative", json = payload)
+        if (items.size > 1 && body.optInt("accepted", -1) != items.size)
+            throw ApiException("We couldn't confirm that all reports were received. Please verify before trying again.")
+    }
+
+    /** The dashboard's notifications (newest first, about the last 10). */
+    suspend fun notifications(): List<CdNotification> {
+        val arr = call("GET", "/notifications").optJSONArray("notifications") ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map { n ->
+            val links = n.optJSONArray("links")?.let { a ->
+                (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+                    .map { NotificationLink(it.optString("title").trim(), it.optString("url").trim()) }
+                    .filter { it.url.startsWith("http") }
+            }.orEmpty()
+            CdNotification(n.optString("PK"), n.optString("title").trim(), n.optString("message"), n.optLong("date"), links)
+        }
+    }
+
+    /** Newest entry of Control D's public changelog feed (docs.controld.com), no auth. */
+    suspend fun latestRelease(): CdRelease? = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url("https://docs.controld.com/changelog.rss").build()
+        client.newCall(req).execute().use { r ->
+            if (!r.isSuccessful) return@use null
+            val xml = r.body?.string().orEmpty()
+            val item = Regex("<item>([\\s\\S]*?)</item>").find(xml)?.groupValues?.get(1) ?: return@use null
+            fun tag(t: String) = Regex("<$t[^>]*>([\\s\\S]*?)</$t>").find(item)?.groupValues?.get(1)
+                ?.replace("<![CDATA[", "")?.replace("]]>", "")?.trim()
+            val version = tag("title")?.takeIf { it.isNotBlank() } ?: return@use null
+            val date = tag("pubDate")?.let { d ->
+                runCatching { java.time.ZonedDateTime.parse(d, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME).toEpochSecond() }.getOrNull()
+            }
+            CdRelease(version, tag("link") ?: "https://docs.controld.com/changelog", date)
         }
     }
 

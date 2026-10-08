@@ -500,7 +500,7 @@ data class DnsAnswer(val name: String, val ttl: Int, val type: String, val data:
  * [source]: filter / bl / svc / rules / default / rebind / grules. [match]: the matched key (a service key
  * like "disney", a filter key, or the custom rule). [via]: redirect location code (proxy PK), if any.
  */
-data class DomainVerdict(val source: String, val action: String, val match: String, val via: String?)
+data class DomainVerdict(val source: String, val action: String, val match: String, val via: String?, val profileId: String?)
 
 data class DomainTestResult(
     val domain: String,
@@ -510,3 +510,11 @@ data class DomainTestResult(
     /** Null when no rule matched (normal resolution). */
     val verdict: DomainVerdict?,
 )
+
+data class NotificationLink(val title: String, val url: String)
+
+/** A dashboard notification; [message] is Markdown, [date] unix seconds. */
+data class CdNotification(val pk: String, val title: String, val message: String, val date: Long, val links: List<NotificationLink>)
+
+/** Latest Control D release from the public changelog feed. */
+data class CdRelease(val version: String, val url: String, val date: Long?)
