@@ -588,6 +588,9 @@ val LocalActionBarHost = staticCompositionLocalOf<ActionBarHostState?> { null }
 /** Bottom space a screen should leave so its last field can scroll clear of the floating action bar. */
 val ActionBarSpace = 96.dp
 
+/** Widest a page gets on tablets and in landscape; wider screens centre it. */
+val MaxContentWidth = 720.dp
+
 /**
  * Shows [actions] as a floating glass pill at the bottom of the screen while this screen is shown,
  * split by thin dividers, like the reference Cancel | Save bar.
@@ -1060,9 +1063,13 @@ fun TopNavTabs(
     counts: List<Int?> = emptyList(),
 ) {
     val shape = RoundedCornerShape(50)
+    // On wide screens the unselected tabs get a fixed width and the bar hugs its tabs (centred), so it
+    // doesn't stretch edge to edge; the selected tab always sizes to its own icon, label and count.
+    BoxWithConstraints(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+    val compact = maxWidth > 520.dp
     Row(
-        modifier
-            .fillMaxWidth()
+        Modifier
+            .then(if (compact) Modifier else Modifier.fillMaxWidth())
             .height(56.dp)
             .clip(shape)
             .background(Palette.Ink.copy(alpha = 0.05f))
@@ -1076,7 +1083,7 @@ fun TopNavTabs(
             val fg = animateCdColor(if (on) Palette.Text else Palette.Muted, tween(220), label = "topTabFg")
             Row(
                 Modifier
-                    .then(if (on) Modifier else Modifier.weight(1f))
+                    .then(if (on) Modifier else if (compact) Modifier.width(72.dp) else Modifier.weight(1f))
                     .fillMaxHeight()
                     .clip(shape)
                     .background(bg)
@@ -1097,5 +1104,6 @@ fun TopNavTabs(
                 }
             }
         }
+    }
     }
 }
