@@ -120,9 +120,7 @@ private fun MainScaffold(onLogout: () -> Unit) {
     // Themed root background, so screens without their own (e.g. Preferences) follow light / dark.
     Box(Modifier.fillMaxSize().background(Palette.Bg)) {
         // Screens end above the keyboard, so the field being typed in scrolls into view instead of hiding under it.
-        // On wide screens (tablets, landscape) pages keep a comfortable reading width, centred.
-        Box(Modifier.fillMaxSize().imePadding().hazeSource(haze), contentAlignment = Alignment.TopCenter) {
-        NavHost(nav, startDestination = "profiles", modifier = Modifier.widthIn(max = MaxContentWidth).fillMaxSize()) {
+        NavHost(nav, startDestination = "profiles", modifier = Modifier.fillMaxSize().imePadding().hazeSource(haze)) {
             composable("profiles") { ProfilesScreen(nav) }
             composable("endpoints") { EndpointsScreen(nav) }
             composable("analytics") { AnalyticsScreen(nav) }
@@ -147,7 +145,6 @@ private fun MainScaffold(onLogout: () -> Unit) {
             composable("resolvers/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
                 EndpointResolversScreen(nav, it.arguments!!.getString("id")!!)
             }
-        }
         }
         // Fade under the floating bars (nav bar, action bar, search) so content scrolls away beneath them.
         val scrimAlpha by androidx.compose.animation.core.animateFloatAsState(

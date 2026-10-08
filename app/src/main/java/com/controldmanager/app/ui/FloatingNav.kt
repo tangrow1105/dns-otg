@@ -31,6 +31,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -451,6 +453,7 @@ fun SheetOverlay(host: SheetHostState, haze: HazeState) {
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(10.dp)
+                .widthIn(max = MaxDialogWidth)
                 .fillMaxWidth()
                 .heightIn(max = maxHeight * 0.9f)
                 .animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))
@@ -588,8 +591,8 @@ val LocalActionBarHost = staticCompositionLocalOf<ActionBarHostState?> { null }
 /** Bottom space a screen should leave so its last field can scroll clear of the floating action bar. */
 val ActionBarSpace = 96.dp
 
-/** Widest a page gets on tablets and in landscape; wider screens centre it. */
-val MaxContentWidth = 720.dp
+/** Widest a dialog or sheet gets on tablets and in landscape; it stays centred. */
+val MaxDialogWidth = 560.dp
 
 /**
  * Shows [actions] as a floating glass pill at the bottom of the screen while this screen is shown,
@@ -950,6 +953,7 @@ private fun DialogPanel(d: HostedDialog, haze: HazeState, live: Boolean, isTop: 
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(10.dp)
+                .widthIn(max = MaxDialogWidth)
                 .fillMaxWidth()
                 .heightIn(max = maxHeight * 0.88f)
                 // Grow / shrink smoothly when the content changes (e.g. Standard ↔ Magic, a switch revealing options).
@@ -1064,46 +1068,65 @@ fun TopNavTabs(
 ) {
     val shape = RoundedCornerShape(50)
     // On wide screens the unselected tabs get a fixed width and the bar hugs its tabs (centred), so it
-    // doesn't stretch edge to edge; the selected tab always sizes to its own icon, label and count.
+    // doesn't stretch edge to edge.
     BoxWithConstraints(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-    val compact = maxWidth > 520.dp
-    Row(
-        Modifier
-            .then(if (compact) Modifier else Modifier.fillMaxWidth())
-            .height(56.dp)
-            .clip(shape)
-            .background(Palette.Ink.copy(alpha = 0.05f))
-            .border(1.dp, Palette.Ink.copy(alpha = 0.10f), shape)
-            .padding(5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        icons.forEachIndexed { i, icon ->
-            val on = i == selected
-            val bg = animateCdColor(if (on) Palette.Ink.copy(alpha = 0.16f) else Color.Transparent, tween(220), label = "topTabBg")
-            val fg = animateCdColor(if (on) Palette.Text else Palette.Muted, tween(220), label = "topTabFg")
+        val compact = maxWidth > 520.dp
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        // Where each tab sits (x, width in px): one highlight pill slides to the selected tab and takes its width.
+        val bounds = remember { androidx.compose.runtime.mutableStateMapOf<Int, Pair<Float, Float>>() }
+        Box(
+            Modifier
+                .then(if (compact) Modifier else Modifier.fillMaxWidth())
+                .height(56.dp)
+                .clip(shape)
+                .background(Palette.Ink.copy(alpha = 0.05f))
+                .border(1.dp, Palette.Ink.copy(alpha = 0.10f), shape)
+                .padding(5.dp),
+        ) {
+            bounds[selected]?.let { (tx, tw) ->
+                val motion = spring<Float>(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
+                val x by androidx.compose.animation.core.animateFloatAsState(tx, motion, label = "tabPillX")
+                val w by androidx.compose.animation.core.animateFloatAsState(tw, motion, label = "tabPillW")
+                Box(
+                    Modifier
+                        .offset { androidx.compose.ui.unit.IntOffset(x.toInt(), 0) }
+                        .width(with(density) { w.toDp() })
+                        .fillMaxHeight()
+                        .clip(shape)
+                        .background(Palette.Ink.copy(alpha = 0.16f)),
+                )
+            }
             Row(
-                Modifier
-                    .then(if (on) Modifier else if (compact) Modifier.width(72.dp) else Modifier.weight(1f))
-                    .fillMaxHeight()
-                    .clip(shape)
-                    .background(bg)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) }
-                    .animateContentSize(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow))
-                    .padding(horizontal = if (on) 16.dp else 0.dp),
-                horizontalArrangement = Arrangement.Center,
+                Modifier.then(if (compact) Modifier else Modifier.fillMaxWidth()).fillMaxHeight(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(icon, labels.getOrNull(i), Modifier.size(22.dp), tint = fg)
-                if (on) {
-                    Spacer(Modifier.width(8.dp))
-                    Text(labels.getOrNull(i).orEmpty(), color = fg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                    counts.getOrNull(i)?.let {
-                        Spacer(Modifier.width(6.dp))
-                        Text("$it", color = fg.copy(alpha = 0.7f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                icons.forEachIndexed { i, icon ->
+                    val on = i == selected
+                    val fg = animateCdColor(if (on) Palette.Text else Palette.Muted, tween(220), label = "topTabFg")
+                    Row(
+                        Modifier
+                            .then(if (on) Modifier else if (compact) Modifier.width(72.dp) else Modifier.weight(1f))
+                            .fillMaxHeight()
+                            .onPlaced { c -> bounds[i] = c.positionInParent().x to c.size.width.toFloat() }
+                            .clip(shape)
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) }
+                            .animateContentSize(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow))
+                            .padding(horizontal = if (on) 16.dp else 0.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(icon, labels.getOrNull(i), Modifier.size(22.dp), tint = fg)
+                        if (on) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(labels.getOrNull(i).orEmpty(), color = fg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            counts.getOrNull(i)?.let {
+                                Spacer(Modifier.width(6.dp))
+                                Text("$it", color = fg.copy(alpha = 0.7f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
                     }
                 }
             }
         }
-    }
     }
 }
