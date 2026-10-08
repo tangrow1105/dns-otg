@@ -3,7 +3,10 @@
 package com.controldmanager.app.ui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -84,8 +87,14 @@ fun ServicesTab(pid: String) {
             val merged = list.map { s -> configuredMap[s.pk]?.let { s.copy(action = it.action) } ?: s }
                 .filter { q.isBlank() || it.name.contains(q, true) || it.pk.contains(q, true) }
                 .let { l -> if (selected == CONFIGURED) l.sortedWith(compareByDescending<Service> { it.action?.enabled == true }.thenBy { it.name.lowercase() }) else l }
-            LazyColumn(contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, SearchPillSpace), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (merged.isEmpty()) item {
+            // One column on phones; two (or more) side by side on landscape and tablets.
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 400.dp),
+                contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, SearchPillSpace),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (merged.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
                     EmptyState(Solar.Widget, if (selected == CONFIGURED) "No service rules yet. Pick a category to add one." else "No services found")
                 }
                 items(merged, key = { it.pk }) { s ->

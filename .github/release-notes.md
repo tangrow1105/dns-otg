@@ -7,5 +7,6 @@
 ### Improved
 - Profile tabs: one highlight slides between tabs and resizes to fit each one
 - Tablets and landscape: the profile tab bar hugs its tabs, and dialogs and pickers keep a comfortable width
+- Tablets and landscape: services show two per row
 
 Not affiliated with Control D.
