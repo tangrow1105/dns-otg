@@ -111,7 +111,10 @@ fun AnalyticsScreen(nav: NavHostController) {
         topBar = {
             TopAppBar(
                 title = { Text("Analytics", fontWeight = FontWeight.SemiBold) },
-                actions = { if (tab == 1) headerActions?.invoke() },
+                actions = {
+                    IconButton(onClick = { nav.navigate("domain-test") }) { Icon(Solar.ShieldCheck, "Domain test") }
+                    if (tab == 1) headerActions?.invoke()
+                },
                 colors = cdTopBarColors(),
             )
         },

@@ -491,3 +491,22 @@ private fun parseAnswers(v: Any?): Pair<List<String>, JSONObject?> {
     visit(v)
     return out to geo
 }
+
+/** One DNS answer from a Domain Test (A, AAAA, CNAME…); [data] is the record's value. */
+data class DnsAnswer(val name: String, val ttl: Int, val type: String, val data: String)
+
+/**
+ * Why Control D answered the way it did. [action]: "0" blocked, "1" bypassed, "2"/"3" redirected.
+ * [source]: filter / bl / svc / rules / default / rebind / grules. [match]: the matched key (a service key
+ * like "disney", a filter key, or the custom rule). [via]: redirect location code (proxy PK), if any.
+ */
+data class DomainVerdict(val source: String, val action: String, val match: String, val via: String?)
+
+data class DomainTestResult(
+    val domain: String,
+    val rcode: Int,
+    val flags: List<String>,
+    val answers: List<DnsAnswer>,
+    /** Null when no rule matched (normal resolution). */
+    val verdict: DomainVerdict?,
+)

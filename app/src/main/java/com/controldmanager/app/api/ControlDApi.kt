@@ -29,6 +29,39 @@ class ControlDApi(private val token: String, private val orgId: String?) {
     /** For calls that can take a while server-side (AI-generated profiles). */
     private val slowClient by lazy { client.newBuilder().readTimeout(120, TimeUnit.SECONDS).build() }
 
+    /**
+     * The dashboard's Domain Test: one DNS-over-HTTPS query to the endpoint's own resolver, asking for JSON so
+     * the answer includes Control D's verdict. No auth (the resolver id is the address); no_log keeps the test
+     * out of the Activity log and statistics.
+     */
+    suspend fun domainTest(resolverUid: String, domain: String, type: String): DomainTestResult = withContext(Dispatchers.IO) {
+        val url = "https://dns.controld.com/$resolverUid".toHttpUrl().newBuilder()
+            .addQueryParameter("name", domain).addQueryParameter("type", type)
+            .addQueryParameter("controld", "1").addQueryParameter("no_log", "1").build()
+        val req = Request.Builder().url(url).header("Accept", "application/dns+json").build()
+        client.newCall(req).execute().use { r ->
+            if (!r.isSuccessful) throw ApiException("Domain test failed (HTTP ${r.code})", r.code)
+            val o = JSONObject(r.body?.string().orEmpty())
+            val answers = o.optJSONArray("answerRRs")?.let { a ->
+                (0 until a.length()).map { a.getJSONObject(it) }.map { rr ->
+                    val t = rr.optString("TYPEname")
+                    DnsAnswer(rr.optString("NAME").removeSuffix("."), rr.optInt("TTL"), t, rr.optString("rdata$t").removeSuffix("."))
+                }
+            }.orEmpty()
+            val v = o.optJSONObject("controld")?.optJSONObject("verdict")
+            val verdict = v?.optString("verdictAction")?.takeIf { it.isNotEmpty() }?.let { action ->
+                DomainVerdict(v.optString("verdictSource"), action, v.optString("verdictMatch"), v.optString("verdictVia").ifBlank { null })
+            }
+            DomainTestResult(
+                domain = o.optString("QNAME", domain).removeSuffix("."),
+                rcode = o.optInt("RCODE"),
+                flags = listOf("TC", "RA", "RD", "CD").filter { o.optBoolean(it) },
+                answers = answers,
+                verdict = verdict,
+            )
+        }
+    }
+
     private suspend fun call(
         method: String,
         path: String,

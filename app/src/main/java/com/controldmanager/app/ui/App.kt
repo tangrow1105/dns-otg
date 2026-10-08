@@ -126,6 +126,7 @@ private fun MainScaffold(onLogout: () -> Unit) {
             composable("analytics") { AnalyticsScreen(nav) }
             composable("account") { AccountScreen(nav, onLogout) }
             composable("billing") { BillingScreen(nav) }
+            composable("domain-test") { DomainTestScreen(nav) }
             composable("account-settings") { AccountSettingsScreen(nav) }
             composable("profile/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
                 ProfileScreen(nav, it.arguments!!.getString("id")!!)
