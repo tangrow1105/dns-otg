@@ -127,7 +127,6 @@ private fun MainScaffold(onLogout: () -> Unit) {
             composable("account") { AccountScreen(nav, onLogout) }
             composable("billing") { BillingScreen(nav) }
             composable("domain-test") { DomainTestScreen(nav) }
-            composable("notifications") { NotificationsScreen(nav) }
             composable("account-settings") { AccountSettingsScreen(nav) }
             composable("profile/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
                 ProfileScreen(nav, it.arguments!!.getString("id")!!)
@@ -401,7 +400,7 @@ private fun AccountScreen(nav: NavHostController, onLogout: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Preferences", fontWeight = FontWeight.SemiBold) },
-            actions = { NotificationsButton { nav.navigate("notifications") } },
+            actions = { NotificationsButton() },
             colors = cdTopBarColors(),
         )
         TopScrollFade {

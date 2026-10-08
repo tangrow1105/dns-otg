@@ -511,10 +511,6 @@ data class DomainTestResult(
     val verdict: DomainVerdict?,
 )
 
-data class NotificationLink(val title: String, val url: String)
-
-/** A dashboard notification; [message] is Markdown, [date] unix seconds. */
-data class CdNotification(val pk: String, val title: String, val message: String, val date: Long, val links: List<NotificationLink>)
 
 /** Latest Control D release from the public changelog feed. */
 data class CdRelease(val version: String, val url: String, val date: Long?)

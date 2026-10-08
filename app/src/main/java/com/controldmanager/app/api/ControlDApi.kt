@@ -77,19 +77,6 @@ class ControlDApi(private val token: String, private val orgId: String?) {
             throw ApiException("We couldn't confirm that all reports were received. Please verify before trying again.")
     }
 
-    /** The dashboard's notifications (newest first, about the last 10). */
-    suspend fun notifications(): List<CdNotification> {
-        val arr = call("GET", "/notifications").optJSONArray("notifications") ?: return emptyList()
-        return (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map { n ->
-            val links = n.optJSONArray("links")?.let { a ->
-                (0 until a.length()).mapNotNull { a.optJSONObject(it) }
-                    .map { NotificationLink(it.optString("title").trim(), it.optString("url").trim()) }
-                    .filter { it.url.startsWith("http") }
-            }.orEmpty()
-            CdNotification(n.optString("PK"), n.optString("title").trim(), n.optString("message"), n.optLong("date"), links)
-        }
-    }
-
     /** Newest entry of Control D's public changelog feed (docs.controld.com), no auth. */
     suspend fun latestRelease(): CdRelease? = withContext(Dispatchers.IO) {
         val req = Request.Builder().url("https://docs.controld.com/changelog.rss").build()

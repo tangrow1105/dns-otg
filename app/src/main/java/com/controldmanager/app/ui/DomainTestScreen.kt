@@ -379,6 +379,8 @@ fun ReportDialog(
     var picking by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf(false) }
     var sendError by remember { mutableStateOf<String?>(null) }
+    // Control D may accept reports only from a dashboard login; then the report is finished there instead.
+    var needsDashboard by remember { mutableStateOf(false) }
     val parsed = parseReportDomains(text)
     val filterLabel = filter?.let { f -> choices.firstOrNull { it.first == f }?.second ?: specialNames[f] ?: f }
     val canSend = parsed.domains.isNotEmpty() && parsed.error == null && comment.isNotBlank() && filter != null && !sending
@@ -423,7 +425,16 @@ fun ReportDialog(
                         Text(if (many) "Also add Bypass rules for these domains to this profile" else "Also add a Bypass rule for this domain to this profile", style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                sendError?.let { Text(it, color = Palette.Red, style = MaterialTheme.typography.bodySmall) }
+                if (needsDashboard) {
+                    Text(
+                        "Control D only accepts reports from the dashboard, not from an API token. Open Domain Test there, check the domain and tap Report.",
+                        color = Palette.Muted, style = MaterialTheme.typography.bodySmall,
+                    )
+                    CdButton(
+                        "Open Domain Test on the dashboard", { openInAppBrowser(ctx, "https://controld.com/dashboard/domain-test"); onDismiss() },
+                        Modifier.fillMaxWidth(), icon = Solar.OpenInNew, height = 44.dp, fontSize = 14.sp,
+                    )
+                } else sendError?.let { Text(it, color = Palette.Red, style = MaterialTheme.typography.bodySmall) }
             }
         },
         confirmButton = {
@@ -440,7 +451,10 @@ fun ReportDialog(
                         showToast(ctx, (if (many) "${parsed.domains.size} reports have been sent" else "Report has been sent") + ruleNote)
                         onDismiss()
                     } catch (e: Exception) {
-                        sendError = e.message ?: "No reports were sent. Please try again later."
+                        val msg = e.message.orEmpty()
+                        needsDashboard = (e as? ApiException)?.code in setOf(401, 403) || msg.contains("does not have access", true) ||
+                            msg.contains("session token", true)
+                        sendError = msg.ifBlank { "No reports were sent. Please try again later." }
                     } finally { sending = false }
                 }
             }) { if (sending) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text("Send") }
