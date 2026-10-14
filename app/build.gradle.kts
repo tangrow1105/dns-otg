@@ -69,6 +69,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // The Activity log's live stream (the dashboard's Real-Time mode is Server-Sent Events).
+    implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
     implementation("io.coil-kt.coil3:coil-svg:3.3.0")
@@ -78,4 +80,8 @@ dependencies {
     implementation("androidx.webkit:webkit:1.14.0")
     // Dashboard opened in a Chrome tab inside the app (shares the Chrome sign-in).
     implementation("androidx.browser:browser:1.8.0")
+
+    testImplementation("junit:junit:4.13.2")
+    // Android's org.json is stubbed in local unit tests; this is the real implementation.
+    testImplementation("org.json:json:20240303")
 }

@@ -418,6 +418,8 @@ data class LogEntry(
     val dstAsn: Long = 0,
     /** Redirect location code (a proxy pk such as "LHR") for redirected queries. */
     val spoofTarget: String = "",
+    /** Row number on the Activity log screen, so rows keep their identity as live queries arrive above them. */
+    val seq: Long = 0,
 ) {
     val epochMs: Long get() = runCatching { java.time.Instant.parse(timestamp).toEpochMilli() }.getOrDefault(0L)
 }
@@ -426,7 +428,7 @@ fun parseLogEntry(o: JSONObject): LogEntry {
     val geo = o.optJSONObject("sourceGeoip")
     val answers = parseAnswers(o.opt("answers"))
     return LogEntry(
-        timestamp = o.optString("timestamp"),
+        timestamp = utcTimestamp(o.optString("timestamp")),
         endpointId = o.optString("endpointId"),
         endpointName = o.optString("endpointName"),
         profileId = o.optString("profileId"),
@@ -451,6 +453,12 @@ fun parseLogEntry(o: JSONObject): LogEntry {
     )
 }
 
+/**
+ * The log sends UTC stamps (…21.85Z), the live stream local ones (…14:53:21.85-04:00), and Android 8-13 can't
+ * Instant.parse the latter; storing both as UTC also makes the same query read the same from either.
+ */
+private fun utcTimestamp(s: String): String = runCatching { java.time.OffsetDateTime.parse(s).toInstant().toString() }.getOrDefault(s)
+
 /** Activity Log filters, as the dashboard's filter bar. [trigger] is (filter|service, id); one at a time, as there. */
 data class LogQuery(
     val endpointId: String? = null,
@@ -464,7 +472,36 @@ data class LogQuery(
     val search: String = "",
 ) {
     val anyFilter get() = copy(search = "") != LogQuery()
+
+    /** The dashboard's query parameters for these filters; the log and its live stream take the same ones. */
+    fun params(): List<Pair<String, String>> = buildList {
+        endpointId?.let { add("endpointId" to it) }
+        clientId?.let { add("clientId" to it) }
+        action?.let { add("action" to it.toString()) }
+        protocol?.let { add("protocol[]" to it) }
+        statusCode?.let { add("statusCode" to it.toString()) }
+        rrType?.let { add("rrType" to it) }
+        trigger?.let { add("trigger" to it.first); add("triggerValue" to it.second) }
+        spoofTarget?.let { add("spoofTarget" to it) }
+        search.trim().takeIf { it.isNotEmpty() }?.let { add("searchQuestion" to it) }
+    }
 }
+
+/**
+ * The [arrived] live queries that aren't in [listed] yet (the page loaded as the stream opened). Queries are
+ * matched on what identifies them, not on every field: the log has answers the stream can leave out. Copies
+ * are counted, so two identical queries in one millisecond keep the one the page lacks.
+ */
+fun notYetListed(listed: List<LogEntry>, arrived: List<LogEntry>): List<LogEntry> {
+    val left = listed.groupingBy { it.identity }.eachCount().toMutableMap()
+    return arrived.filter { e ->
+        val n = left[e.identity] ?: 0
+        if (n > 0) left[e.identity] = n - 1
+        n == 0
+    }
+}
+
+private val LogEntry.identity get() = listOf(timestamp, domain, rrType, endpointId, sourceIp)
 
 /**
  * DNS answers. The analytics API sends [{"ips": [...], "cname": [...], "geoip": {...}}] (sometimes a bare

@@ -2,6 +2,11 @@ package com.controldmanager.app.api
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -9,6 +14,10 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
+import okhttp3.sse.EventSource
+import okhttp3.sse.EventSourceListener
+import okhttp3.sse.EventSources
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
@@ -28,6 +37,12 @@ class ControlDApi(private val token: String, private val orgId: String?) {
 
     /** For calls that can take a while server-side (AI-generated profiles). */
     private val slowClient by lazy { client.newBuilder().readTimeout(120, TimeUnit.SECONDS).build() }
+
+    /**
+     * The live Activity log: the server sends a keep-alive every 15 s, so two missed ones mean the line is dead.
+     * No retries of its own: a retried connect would send the single-use ticket again and be turned away.
+     */
+    private val streamClient by lazy { client.newBuilder().readTimeout(40, TimeUnit.SECONDS).retryOnConnectionFailure(false).build() }
 
     /**
      * The dashboard's Domain Test: one DNS-over-HTTPS query to the endpoint's own resolver, asking for JSON so
@@ -289,17 +304,53 @@ class ControlDApi(private val token: String, private val orgId: String?) {
 
     /** Raw query log with the dashboard's Activity Log filters (same query parameters it sends). */
     suspend fun activityLog(region: String, r: TimeRange, page: Int, f: LogQuery): List<LogEntry> =
-        analytics(region, "/activity-log", range(r, f.endpointId) + buildList {
-            add("page" to page.toString())
-            f.clientId?.let { add("clientId" to it) }
-            f.action?.let { add("action" to it.toString()) }
-            f.protocol?.let { add("protocol[]" to it) }
-            f.statusCode?.let { add("statusCode" to it.toString()) }
-            f.rrType?.let { add("rrType" to it) }
-            f.trigger?.let { add("trigger" to it.first); add("triggerValue" to it.second) }
-            f.spoofTarget?.let { add("spoofTarget" to it) }
-            f.search.takeIf { it.isNotBlank() }?.let { add("searchQuestion" to it.trim()) }
-        }).optJSONArray("queries").objects().map(::parseLogEntry)
+        analytics(region, "/activity-log", range(r, null) + ("page" to page.toString()) + f.params())
+            .optJSONArray("queries").objects().map(::parseLogEntry)
+
+    /**
+     * Queries as they happen, as the dashboard's Real-Time mode streams them (Server-Sent Events, one query per
+     * event, filtered server-side). Only queries made after [onConnected] arrive: the stream doesn't replay. The flow
+     * ends when the server closes the stream. It fails with an [ApiException] when the API token can't get a ticket,
+     * and with an IOException for anything a new connection might get past (network trouble, a refused stream).
+     */
+    fun activityLogStream(region: String, f: LogQuery, onConnected: () -> Unit = {}): Flow<LogEntry> = callbackFlow {
+        // The stream takes a single-use ticket instead of the API token, so each connection asks for a new one.
+        val ticket = analytics(region, "/auth/token", emptyList()).optString("token")
+        if (ticket.isBlank()) throw ApiException("Analytics didn't issue a live log ticket")
+        val url = "https://$region.analytics.controld.com/v2/activity-log/realtime".toHttpUrl().newBuilder()
+            .addQueryParameter("startTime", java.time.Instant.ofEpochMilli(System.currentTimeMillis()).toString())
+            .apply { f.params().forEach { (k, v) -> addQueryParameter(k, v) } }
+            .addQueryParameter("authToken", ticket)
+            .build()
+        val request = Request.Builder().url(url)
+            .apply { orgId?.takeIf { it.isNotBlank() }?.let { header("X-Force-Org-Id", it) } }
+            .build()
+        val source = EventSources.createFactory(streamClient).newEventSource(request, object : EventSourceListener() {
+            override fun onOpen(eventSource: EventSource, response: Response) = onConnected()
+
+            override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
+                // Anything that isn't a query (a heartbeat the server might add) would otherwise be a blank row.
+                runCatching { parseLogEntry(JSONObject(data)) }.getOrNull()
+                    ?.takeIf { it.timestamp.isNotBlank() && it.domain.isNotBlank() }
+                    ?.let { trySend(it) }
+            }
+
+            override fun onClosed(eventSource: EventSource) {
+                channel.close()
+            }
+
+            override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
+                // An HTTP error carries the analytics error message; a dropped connection only the exception. Both are
+                // worth another try with a fresh ticket, so neither is an ApiException.
+                val error = if (response != null && !response.isSuccessful) {
+                    val message = runCatching { JSONObject(response.body?.string().orEmpty()).optJSONObject("error")?.optStringOrNull("message") }.getOrNull()
+                    java.io.IOException("Live log: ${message ?: "HTTP ${response.code}"}")
+                } else t ?: java.io.IOException("Live log stopped")
+                channel.close(error)
+            }
+        })
+        awaitClose { source.cancel() }
+    }.buffer(Channel.UNLIMITED)
 
     /** Last activity and clients per endpoint (device_id), as the dashboard's Endpoints page shows. */
     suspend fun endpointActivity(region: String): Map<String, EndpointActivity> {

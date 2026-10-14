@@ -3,11 +3,18 @@
 package com.controldmanager.app.ui
 
 import android.content.Context
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -26,6 +33,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
@@ -35,6 +43,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -45,10 +54,12 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavHostController
 import com.controldmanager.app.api.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -86,6 +97,7 @@ private val protocols = listOf(
 )
 
 private const val PREF_REGION = "analytics_region"
+private const val PREF_LIVE = "activity_log_live"
 
 private fun prefs(ctx: Context) = ctx.getSharedPreferences("controldmanager_ui", Context.MODE_PRIVATE)
 
@@ -935,12 +947,20 @@ private fun ActivityLogView(
     val q = search.query
     BottomSearch(search, "Search queries")
     var entries by remember(region, range, query) { mutableStateOf<List<LogEntry>>(emptyList()) }
+    // Pages count back from the end of this window: the picked range, or with Live the moment the newest page loaded.
+    var window by remember(region, range, query) { mutableStateOf(range) }
     var page by remember(region, range, query) { mutableIntStateOf(0) }
     var done by remember(region, range, query) { mutableStateOf(false) }
     var loading by remember(region, range, query) { mutableStateOf(false) }
     var error by remember(region, range, query) { mutableStateOf<String?>(null) }
-    var selected by remember(region, range, query) { mutableStateOf<Set<Int>>(emptySet()) }
+    // Selected rows by row number, so live queries arriving above don't shift the selection.
+    var selected by remember(region, range, query) { mutableStateOf<Set<Long>>(emptySet()) }
     var open by remember { mutableStateOf<LogEntry?>(null) }
+    val rowSeq = remember { longArrayOf(0) }
+    fun numbered(rows: List<LogEntry>) = rows.map { it.copy(seq = ++rowSeq[0]) }
+    var liveOn by remember { mutableStateOf(prefs(ctx).getBoolean(PREF_LIVE, true)) }
+    val liveWanted = liveOn && !range.custom
+    var live by remember { mutableStateOf(LiveState.Off) }
     var sheet by remember { mutableStateOf<String?>(null) }
     var ruleFor by remember { mutableStateOf<Pair<List<String>, String?>?>(null) }
     val devices = rememberLoader { runCatching { session.api.devices() }.getOrDefault(emptyList()) }
@@ -965,19 +985,25 @@ private fun ActivityLogView(
         }
     }
 
+    // Mode ids (ads_small) are drawn with their parent filter's icon.
+    suspend fun learnFilterParents(rows: List<LogEntry>) =
+        rows.filter { it.trigger == "filter" && !filterParentCache.containsKey(it.triggerValue) }.map { it.triggerValue }.distinct().forEach { id ->
+            runCatching { session.filterParent(id) }.getOrNull()?.let { filterParentCache[id] = it }
+        }
+
     // Pages load in a screen-wide scope: the effects that trigger them restart on every scroll,
     // which would otherwise cancel a page mid-request.
     val loadScope = rememberCoroutineScope()
     fun loadNext() {
         if (loading || done) return
         loading = true; error = null
+        val w = window
         loadScope.launch { try {
-            val next = session.api.activityLog(region, range, page, query)
-            // Mode ids (ads_small) are drawn with their parent filter's icon.
-            next.filter { it.trigger == "filter" && !filterParentCache.containsKey(it.triggerValue) }.map { it.triggerValue }.distinct().forEach { id ->
-                runCatching { session.filterParent(id) }.getOrNull()?.let { filterParentCache[id] = it }
-            }
-            entries = entries + next
+            val next = session.api.activityLog(region, w, page, query)
+            learnFilterParents(next)
+            // Live reloaded the newest page meanwhile, so this page belongs to the list it replaced.
+            if (w !== window) return@launch
+            entries = entries + numbered(next)
             page++
             if (next.isEmpty()) done = true
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -993,11 +1019,108 @@ private fun ActivityLogView(
     val firstLoad = remember { booleanArrayOf(true) }
     LaunchedEffect(region, range, query) {
         if (firstLoad[0]) firstLoad[0] = false else listState.scrollToItem(0)
-        loadNext()
+        // With Live on, the live session loads the first page once its stream is open.
+        if (!liveWanted) loadNext()
     }
     val nearEnd by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 } }
     LaunchedEffect(nearEnd, entries.size) {
         if (entries.isNotEmpty() && nearEnd >= entries.size - 5) loadNext()
+    }
+
+    // ----- Live: the dashboard's Real-Time stream, on top of the loaded page -----
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    val atTop by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 } }
+    // Live queries waiting for the reader to come back to the top.
+    var newAbove by remember(region, range, query) { mutableIntStateOf(0) }
+    var liveRetry by remember { mutableIntStateOf(0) }
+    // A finger on the list: rows moving under it would cancel the tap or long-press it started.
+    var touching by remember { mutableStateOf(false) }
+
+    // One session: open the stream, then load the newest page, so no query falls between the two. Returns true when
+    // enough live rows piled up to start over from a fresh page, false when the server ended the stream.
+    suspend fun liveSession(onLive: () -> Unit): Boolean = coroutineScope {
+        val opened = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val arrived = mutableListOf<LogEntry>()
+        val stream = launch { session.api.activityLogStream(region, query) { opened.complete(Unit) }.collect { arrived += it } }
+        stream.invokeOnCompletion { opened.completeExceptionally(it ?: ApiException("The live log closed before it opened")) }
+        opened.await()
+        val fresh = range.refreshed()
+        val first = session.api.activityLog(region, fresh, 0, query)
+        learnFilterParents(first)
+        window = fresh; entries = numbered(first); page = 1; done = first.isEmpty(); error = null; newAbove = 0
+        // A long-press while the page loaded would point at rows that are gone now.
+        selected = emptySet()
+        val unlisted = notYetListed(first, arrived)
+        arrived.clear(); arrived += unlisted
+        onLive()
+        var added = 0
+        // Queries that came in while the reader was further down or selecting, newest first. They wait instead of
+        // going in above, where a busy network would add rows faster than anyone can scroll back up.
+        var held = emptyList<LogEntry>()
+        // Beyond LIVE_ROWS they are only counted; the fresh page the list starts over from brings them back.
+        var overflow = 0
+        // Rows go in a few times a second rather than one by one: a busy network sends hundreds of queries a second.
+        while (stream.isActive) {
+            kotlinx.coroutines.delay(250)
+            if (arrived.isNotEmpty()) {
+                val batch = arrived.sortedByDescending { it.epochMs }
+                arrived.clear()
+                if (added + held.size + batch.size > LIVE_ROWS) overflow += batch.size
+                else {
+                    // Here rather than just before they go in: nothing may wait between that check and the insert.
+                    learnFilterParents(batch)
+                    held = batch + held
+                }
+            }
+            if (held.isEmpty() && overflow == 0) continue
+            if (!atTop || selected.isNotEmpty() || touching) { newAbove = held.size + overflow; continue }
+            if (overflow > 0) { stream.cancel(); return@coroutineScope true }
+            entries = numbered(held) + entries
+            added += held.size
+            held = emptyList()
+            newAbove = 0
+            // Keyed rows would otherwise keep the old first row in view, with the new ones above it.
+            listState.requestScrollToItem(0)
+        }
+        false
+    }
+
+    LaunchedEffect(region, range, query, liveWanted, liveRetry) {
+        if (!liveWanted) {
+            live = LiveState.Off
+            newAbove = 0
+            if (entries.isEmpty() && !done) loadNext()
+            return@LaunchedEffect
+        }
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            var failures = 0
+            while (true) {
+                // A session replaces the list with the newest page, so it waits until nobody is reading further down.
+                if (!atTop || selected.isNotEmpty() || touching) {
+                    live = LiveState.Paused
+                    snapshotFlow { atTop && selected.isEmpty() && !touching }.first { it }
+                }
+                live = if (failures == 0) LiveState.Connecting else LiveState.Reconnecting
+                val began = System.currentTimeMillis()
+                // A stream that ran for a while before it ended starts the waits over; one that keeps ending
+                // straight away (or never opens) waits longer each time.
+                fun ranAWhile() = System.currentTimeMillis() - began > 10_000
+                try {
+                    val full = liveSession { live = LiveState.On }
+                    failures = if (full || ranAWhile()) 0 else failures + 1
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Without the stream, still show the history.
+                    if (entries.isEmpty() && !done) loadNext()
+                    // The API token can't get a live log ticket (or read the log): trying again won't change that.
+                    if (e is ApiException && e.code in setOf(401, 403, 404)) { live = LiveState.Failed; return@repeatOnLifecycle }
+                    failures = if (ranAWhile()) 1 else failures + 1
+                }
+                // Network trouble (a lift, a tunnel, switching Wi-Fi) passes, so keep trying, less and less often.
+                if (failures > 0) { live = LiveState.Reconnecting; kotlinx.coroutines.delay(LIVE_RETRY_MS[minOf(failures, LIVE_RETRY_MS.size) - 1]) }
+            }
+        }
     }
 
     val csvSaver = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -1035,7 +1158,7 @@ private fun ActivityLogView(
                 IconButton(onClick = { selected = emptySet() }) { Icon(Solar.Close, "Close selection mode") }
                 Text("${selected.size} selected", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 CdButton("Create Rule", {
-                    val picked = selected.sorted().mapNotNull { entries.getOrNull(it) }
+                    val picked = entries.filter { it.seq in selected }
                     ruleFor = picked.map { it.domain }.distinct() to picked.firstOrNull { it.profileId.isNotBlank() }?.profileId
                 }, iconContent = { StatGlyph("log-edit", 18, Palette.Teal) }, tint = Palette.Teal, height = 44.dp, fontSize = 15.sp)
             }
@@ -1046,6 +1169,18 @@ private fun ActivityLogView(
             Modifier.horizontalScrollFaded().padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
         ) {
+            // A custom range is in the past, so there is nothing to stream into it.
+            if (!range.custom) LiveChip(live, newAbove) {
+                when {
+                    live == LiveState.Failed -> liveRetry++
+                    // "Live · 12 new": take the reader up to them.
+                    live == LiveState.On && newAbove > 0 -> loadScope.launch { listState.animateScrollToItem(0) }
+                    else -> {
+                        liveOn = !liveOn
+                        prefs(ctx).edit().putBoolean(PREF_LIVE, liveOn).apply()
+                    }
+                }
+            }
             val ep = query.endpointId?.let(deviceOf)
             LogFilterChip(ep?.name ?: "All Endpoints", query.endpointId != null, icon = ep?.let { { DeviceGlyph(it.icon, 16) } }) { sheet = "endpoint" }
             val client = query.clientId?.let { id -> ep?.clientList?.firstOrNull { it.id == id }?.label ?: id }
@@ -1087,19 +1222,33 @@ private fun ActivityLogView(
                 isRefreshing = loading && entries.isEmpty(), onRefresh = onRefresh, modifier = Modifier.fillMaxSize(),
             ) {
                 TopScrollFade(isScrolled = { listState.isScrolledDown() }) {
-                LazyColumn(state = listState, contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp + LocalBottomBarSpace.current), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                LazyColumn(
+                    state = listState, contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp + LocalBottomBarSpace.current), verticalArrangement = Arrangement.spacedBy(6.dp),
+                    // Only watches the finger (nothing consumed), so taps, long-presses and scrolling work as before.
+                    modifier = Modifier.pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                            touching = true
+                            // A cancelled touch (shade pulled down, list leaving the screen) never sends the lift.
+                            try { while (awaitPointerEvent(PointerEventPass.Initial).changes.any { it.pressed }) Unit } finally { touching = false }
+                        }
+                    },
+                ) {
                     if (entries.isEmpty()) item { EmptyState(Solar.Sad, "No queries match your search criteria") }
-                    items(entries.size) { i ->
+                    // Keyed by row number: live rows arriving above keep each row (and its loaded icons) in place.
+                    items(entries.size, key = { entries[it].seq }) { i ->
                         val e = entries[i]
-                        val isSel = i in selected
-                        LogRow(
-                            e, deviceOf(e.endpointId), endpointName(e), clientName(e), services.data,
-                            selecting = selected.isNotEmpty(), selected = isSel,
-                            onClick = { if (selected.isNotEmpty()) selected = if (isSel) selected - i else selected + i else open = e },
-                            onLongClick = { selected = if (isSel) selected - i else selected + i },
-                            onInfo = { open = e },
-                            redirect = proxies.data?.firstOrNull { it.pk == e.spoofTarget },
-                        )
+                        val isSel = e.seq in selected
+                        Box(Modifier.animateItem()) {
+                            LogRow(
+                                e, deviceOf(e.endpointId), endpointName(e), clientName(e), services.data,
+                                selecting = selected.isNotEmpty(), selected = isSel,
+                                onClick = { if (selected.isNotEmpty()) selected = if (isSel) selected - e.seq else selected + e.seq else open = e },
+                                onLongClick = { selected = if (isSel) selected - e.seq else selected + e.seq },
+                                onInfo = { open = e },
+                                redirect = proxies.data?.firstOrNull { it.pk == e.spoofTarget },
+                            )
+                        }
                     }
                     if (loading) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) } }
                     error?.let { item { Text(it, color = Palette.Red, style = MaterialTheme.typography.bodySmall) } }
@@ -1181,6 +1330,43 @@ private fun ActivityLogView(
     ruleFor?.let { (domains, pid) ->
         CreateRuleFromLogDialog(domains, pid, runner, onDismiss = { ruleFor = null }, onCreated = { selected = emptySet() })
     }
+}
+
+private enum class LiveState { Off, Connecting, On, Paused, Reconnecting, Failed }
+
+/** Live rows kept on top of the loaded page before the list starts over from a fresh one. */
+private const val LIVE_ROWS = 1000
+
+/** Waits before reconnecting the live log after the 1st, 2nd, 3rd and every later failure in a row. */
+private val LIVE_RETRY_MS = listOf(2_000L, 5_000L, 10_000L, 30_000L)
+
+/** The Live switch at the front of the filter bar; its dot pulses while queries stream in. */
+@Composable
+private fun LiveChip(state: LiveState, newAbove: Int, onClick: () -> Unit) {
+    val failed = state == LiveState.Failed
+    CdChip(
+        selected = state != LiveState.Off, onClick = onClick, color = if (failed) Palette.Red else Palette.Teal,
+        label = {
+            Text(
+                when {
+                    failed -> "Live · retry"
+                    state == LiveState.Reconnecting -> "Reconnecting"
+                    state == LiveState.Paused -> "Live · paused"
+                    state == LiveState.On && newAbove > 0 -> "Live · ${if (newAbove > 999) "999+" else newAbove} new"
+                    else -> "Live"
+                },
+                maxLines = 1,
+            )
+        },
+        leadingIcon = {
+            val pulse = if (state == LiveState.On) {
+                rememberInfiniteTransition(label = "live")
+                    .animateFloat(1f, 0.3f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "livePulse").value
+            } else 1f
+            val dot = when (state) { LiveState.On -> Palette.Teal; LiveState.Failed -> Palette.Red; else -> Palette.Muted }
+            Box(Modifier.size(8.dp).alpha(pulse).clip(CircleShape).background(dot))
+        },
+    )
 }
 
 /** Dashboard-style filter dropdown: plain label with a chevron; bright when set. */
