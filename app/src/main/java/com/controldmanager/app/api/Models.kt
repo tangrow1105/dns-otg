@@ -514,3 +514,63 @@ data class DomainTestResult(
 
 /** Latest Control D release from the public changelog feed. */
 data class CdRelease(val version: String, val url: String, val date: Long?)
+
+// ---------- Dragonfly (Control D's domain intelligence) ----------
+
+data class DomainIntel(
+    val status: String,
+    val categories: List<IntelCategory>,
+    val screenshotUrl: String?,
+    val http: IntelHttp?,
+    val tls: IntelTls?,
+    val whois: IntelWhois?,
+    val netlog: IntelNetlog?,
+)
+
+data class IntelCategory(val name: String, val confidence: Double, val label: String, val reasoning: String, val dangerous: Boolean)
+
+data class IntelHttp(val statusCode: Int, val finalUrl: String, val contentType: String)
+
+data class IntelTls(val protocols: String, val issuer: String, val validUntil: String) {
+    /** The certificate authority by name: its organization (O=…), else its common name (CN=…). */
+    val issuerName: String get() {
+        val parts = issuer.split(',').map { it.trim() }
+        return parts.firstOrNull { it.startsWith("O=") }?.removePrefix("O=")
+            ?: parts.firstOrNull { it.startsWith("CN=") }?.removePrefix("CN=")
+            ?: issuer
+    }
+}
+
+data class IntelWhois(val registrar: String, val organization: String, val created: String, val expires: String)
+
+data class IntelNetlog(val total: Int, val topDomain: String)
+
+/**
+ * Dragonfly's report on a domain. Null when it has none: a domain it hasn't classified (a 404 error inside a
+ * successful response) or a name it won't look at, such as _dmarc.google.com (400 "invalid domain"). Sections it
+ * has nothing for come as {} and are left out.
+ */
+fun parseDomainIntel(o: JSONObject): DomainIntel? {
+    if (!o.optBoolean("success")) {
+        val error = o.optJSONObject("error")
+        val code = error?.optInt("code") ?: 0
+        if (code == 404 || code == 400) return null
+        throw ApiException(error?.optStringOrNull("message") ?: "Dragonfly couldn't look this domain up", code)
+    }
+    val body = o.optJSONObject("body") ?: JSONObject()
+    val features = body.optJSONObject("features") ?: JSONObject()
+    fun section(name: String) = features.optJSONObject(name)?.takeIf { it.length() > 0 }
+    return DomainIntel(
+        status = body.optString("status"),
+        categories = section("classification")?.optJSONArray("categories").objects().map {
+            IntelCategory(it.optString("name"), it.optDouble("confidence", 0.0), it.optString("confidenceLabel"), it.optString("reasoning"), it.optBoolean("dangerous"))
+        },
+        screenshotUrl = section("screenshot")?.optStringOrNull("screenshotUrl"),
+        http = section("http")?.let { IntelHttp(it.optInt("statusCode"), it.optString("finalUrl"), it.optString("contentType")) },
+        tls = section("tls")?.let { IntelTls(it.optString("supportedProtocols"), it.optString("issuer"), it.optString("validUntil")) },
+        whois = section("whois")?.optJSONObject("parsed")?.takeIf { it.length() > 0 }?.let {
+            IntelWhois(it.optString("registrar"), it.optJSONObject("registrant")?.optString("organization").orEmpty(), it.optString("creationDate"), it.optString("expirationDate"))
+        },
+        netlog = section("netlog")?.let { IntelNetlog(it.optInt("total"), it.optString("topDomain")) },
+    )
+}

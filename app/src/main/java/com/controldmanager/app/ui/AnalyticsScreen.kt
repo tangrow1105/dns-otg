@@ -1463,6 +1463,8 @@ private fun LogDetailSheet(
             }
             if (e.isp.isNotBlank()) KeyValueRow("ISP", e.isp + (if (e.asn > 0) " (AS ${e.asn})" else ""))
 
+            DragonflySection(e.domain, e.epochMs)
+
             Spacer(Modifier.height(16.dp))
             CdButton("Create Rule", onCreateRule, Modifier.fillMaxWidth(), iconContent = { StatGlyph("log-edit", 20, Palette.Teal) }, tint = Palette.Teal)
         }

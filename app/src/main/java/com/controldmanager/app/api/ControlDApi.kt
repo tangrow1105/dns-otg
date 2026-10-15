@@ -65,6 +65,20 @@ class ControlDApi(private val token: String, private val orgId: String?) {
         }
     }
 
+    /**
+     * Dragonfly's report on [domain] as of [at] (the query's time, as the dashboard asks for it), or null when
+     * Dragonfly hasn't classified the domain. Dragonfly is public, so the API token isn't sent there.
+     */
+    suspend fun dragonfly(domain: String, at: String): DomainIntel? = withContext(Dispatchers.IO) {
+        val url = "https://api.dragonfly.controld.com/api/v1/domains".toHttpUrl().newBuilder()
+            .addPathSegment(domain).addQueryParameter("at", at).build()
+        client.newCall(Request.Builder().url(url).header("Accept", "application/json").build()).execute().use { r ->
+            val o = runCatching { JSONObject(r.body?.string().orEmpty()) }.getOrNull()
+                ?: throw ApiException("Dragonfly: HTTP ${r.code}", r.code)
+            parseDomainIntel(o)
+        }
+    }
+
     /** Newest entry of Control D's public changelog feed (docs.controld.com), no auth. */
     suspend fun latestRelease(): CdRelease? = withContext(Dispatchers.IO) {
         val req = Request.Builder().url("https://docs.controld.com/changelog.rss").build()
