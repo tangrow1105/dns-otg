@@ -154,12 +154,20 @@ fun EndpointScreen(nav: NavHostController, id: String) {
                                     ) {
                                         for (name in n) {
                                             val created = session.api.createDevice(f.createFields(name))
+                                            last = created
+                                            // Off the form once it exists: if a later step fails, creating again won't make it twice.
+                                            form = form?.let { cur -> cur.copy(name = cur.names.toMutableList().apply { remove(name) }.joinToString(", ")) }
                                             val extra = buildList {
                                                 if (f.pinOn) add("deactivation_pin" to f.pin.trim())
                                                 if (f.status != 1) add("status" to "${f.status}")
                                             }
-                                            if (extra.isNotEmpty()) session.api.modifyDevice(created.pk, extra)
-                                            last = created
+                                            if (extra.isNotEmpty()) try {
+                                                session.api.modifyDevice(created.pk, extra)
+                                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                                throw e
+                                            } catch (e: Exception) {
+                                                throw IllegalStateException("$name was created, but its PIN or status wasn't set: ${e.message}")
+                                            }
                                         }
                                     }
                                 } else {

@@ -168,14 +168,20 @@ private val TestRedirected get() = Palette.mix(Color(0xFFE69201), Color(0xFFD084
 private fun VerdictCard(r: DomainTestResult, services: Map<String, Service>, filters: Map<String, String>, proxies: List<Proxy>) {
     val v = r.verdict
     if (v == null) {
-        // Nothing matched: the domain resolves normally (the dashboard shows only the results here).
+        // Nothing matched: the domain resolves normally (the dashboard shows only the results here), unless the
+        // answer is an error such as NXDOMAIN (a mistyped domain) or REFUSED (a disabled endpoint).
+        val resolves = r.rcode == 0
         Row(
             Modifier.fillMaxWidth().clip(CdShape).background(Palette.Card).padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Solar.CheckCircle, null, Modifier.size(20.dp), tint = TestBypassed)
+            Icon(if (resolves) Solar.CheckCircle else Solar.DangerTriangle, null, Modifier.size(20.dp), tint = if (resolves) TestBypassed else Palette.Orange)
             Spacer(Modifier.width(10.dp))
-            Text("No rule matched: ${r.domain} resolves normally", color = Palette.Text, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                if (resolves) "No rule matched: ${r.domain} resolves normally"
+                else "No rule matched, but ${r.domain} didn't resolve (${rcodeNames[r.rcode] ?: "RCODE ${r.rcode}"})",
+                color = Palette.Text, style = MaterialTheme.typography.bodyMedium,
+            )
         }
         return
     }

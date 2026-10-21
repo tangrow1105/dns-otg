@@ -172,7 +172,7 @@ private const val STALE_MS = 25 * 60_000L
 
 private class NotSignedIn : Exception("Sign in to DNS OTG to see your stats")
 
-/** The analytics region, kept so a widget update is a single request. Cleared on sign-out. */
+/** The analytics region, kept so a widget update is a single request. Cleared on sign-in/out and region changes. */
 private fun regionPrefs(ctx: Context) = ctx.getSharedPreferences("dnsotg_widget", Context.MODE_PRIVATE)
 
 /** The same query-over-time call as Statistics' chart: one request gives the totals and the chart. */
@@ -189,28 +189,60 @@ internal suspend fun loadStats(ctx: Context, cfg: WidgetConfig): WidgetStats {
     return WidgetStats(blocked.sum(), bypassed.sum(), redirected.sum(), series.sumOf { p -> p.counts.values.sum() }, blocked, bypassed, redirected)
 }
 
+/** Widgets with a load running: a widget is drawn once for each of its sizes, and each would start its own. */
+private val loadingWidgets = java.util.Collections.synchronizedSet(mutableSetOf<GlanceId>())
+
+/** Bumped on sign-in/out and region changes, so a load that started before one of them runs again. */
+private val widgetEpoch = java.util.concurrent.atomic.AtomicInteger()
+
 /** Loads the widget's numbers and redraws it; failures keep the last numbers and say why. */
 internal suspend fun refreshWidget(ctx: Context, id: GlanceId) {
-    val prefs = getAppWidgetState(ctx, PreferencesGlanceStateDefinition, id)
-    updateAppWidgetState(ctx, id) { it[WidgetKeys.refreshing] = true }
-    StatsWidget().update(ctx, id)
-    val result = runCatching { loadStats(ctx, prefs.widgetConfig()) }
-    updateAppWidgetState(ctx, id) { p ->
-        p[WidgetKeys.refreshing] = false
-        p[WidgetKeys.updated] = System.currentTimeMillis()
-        result.onSuccess { p[WidgetKeys.data] = it.toJson(); p.remove(WidgetKeys.error) }
-        result.onFailure { p[WidgetKeys.error] = if (it is NotSignedIn) it.message.orEmpty() else "Couldn't update" }
-        if (result.exceptionOrNull() is NotSignedIn) p.remove(WidgetKeys.data)
+    if (!loadingWidgets.add(id)) return
+    var done = false
+    try {
+        updateAppWidgetState(ctx, id) { it[WidgetKeys.refreshing] = true }
+        StatsWidget().update(ctx, id)
+        while (!done) {
+            val prefs = getAppWidgetState(ctx, PreferencesGlanceStateDefinition, id)
+            val epoch = widgetEpoch.get()
+            val result = runCatching { loadStats(ctx, prefs.widgetConfig()) }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+            updateAppWidgetState(ctx, id) { p ->
+                // New settings or another account while it loaded: these numbers are for the old ones, so load again.
+                if (p[WidgetKeys.configVersion] != prefs[WidgetKeys.configVersion] || epoch != widgetEpoch.get()) return@updateAppWidgetState
+                p[WidgetKeys.refreshing] = false
+                p[WidgetKeys.updated] = System.currentTimeMillis()
+                result.onSuccess { p[WidgetKeys.data] = it.toJson(); p.remove(WidgetKeys.error) }
+                result.onFailure { p[WidgetKeys.error] = if (it is NotSignedIn) it.message.orEmpty() else "Couldn't update" }
+                if (result.exceptionOrNull() is NotSignedIn) p.remove(WidgetKeys.data)
+                done = true
+            }
+        }
+        StatsWidget().update(ctx, id)
+    } finally {
+        // Stopped mid-load (the widget's session timed out): say so rather than "Updating…", and count it as a try,
+        // so the widget doesn't start loading again straight away. The widget may be gone, hence runCatching.
+        if (!done) kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+            runCatching {
+                updateAppWidgetState(ctx, id) { p ->
+                    p[WidgetKeys.refreshing] = false
+                    p[WidgetKeys.updated] = System.currentTimeMillis()
+                    p[WidgetKeys.error] = "Couldn't update"
+                }
+                StatsWidget().update(ctx, id)
+            }
+        }
+        loadingWidgets.remove(id)
     }
-    StatsWidget().update(ctx, id)
 }
 
 private val widgetScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-/** After signing in or out: every widget loads again (and forgets the old account's region). */
+/** After signing in or out, or a storage region change: every widget loads again (and forgets the old region). */
 fun refreshAllWidgets(ctx: Context) {
     val app = ctx.applicationContext
     regionPrefs(app).edit().clear().apply()
+    widgetEpoch.incrementAndGet()
     widgetScope.launch {
         runCatching {
             GlanceAppWidgetManager(app).getGlanceIds(StatsWidget::class.java).forEach { refreshWidget(app, it) }
@@ -258,7 +290,9 @@ class StatsWidget : GlanceAppWidget() {
                 if (stats == null && prefs[WidgetKeys.error] == null || age > STALE_MS) refreshWidget(context, id)
             }
             val cfg = prefs.widgetConfig()
-            WidgetContent(context, cfg, stats, prefs[WidgetKeys.error], prefs[WidgetKeys.refreshing] == true, WidgetColors(widgetDark(context, cfg.colours), cfg.opacity))
+            // Only while a load really runs: one cut off when the app was closed leaves the flag behind.
+            val refreshing = prefs[WidgetKeys.refreshing] == true && id in loadingWidgets
+            WidgetContent(context, cfg, stats, prefs[WidgetKeys.error], refreshing, WidgetColors(widgetDark(context, cfg.colours), cfg.opacity))
         }
     }
 }

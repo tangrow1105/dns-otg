@@ -64,11 +64,7 @@ fun ProfileScreen(nav: NavHostController, id: String) {
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        runner.run("Profile exported") {
-            val json = session.api.exportProfile(id).toString(2)
-            ctx.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
-                ?: throw IllegalStateException("Couldn't write the file")
-        }
+        runner.run("Profile exported") { writeNewDocument(ctx, uri) { session.api.exportProfile(id).toString(2) } }
     }
 
     Scaffold(
@@ -78,8 +74,9 @@ fun ProfileScreen(nav: NavHostController, id: String) {
                 subtitle = p?.let { if (it.isPaused) "Paused until ${formatTime(it.disabledUntil)}" else "Updated ${formatTime(it.updated)}" },
             ) {
                 // Same three actions as the dashboard's profile header: clone, delete, export.
-                HeaderAction(Solar.CopyAdd, "Clone profile") { dialog = "clone" }
-                HeaderAction(Solar.Delete, "Delete profile") { dialog = "delete" }
+                // Clone and delete name the profile, so they wait until it has loaded.
+                HeaderAction(Solar.CopyAdd, "Clone profile") { if (p != null) dialog = "clone" }
+                HeaderAction(Solar.Delete, "Delete profile") { if (p != null) dialog = "delete" }
                 HeaderAction(Solar.FileDownload, "Export profile") {
                     exporter.launch("${(p?.name ?: "profile").replace(Regex("[^A-Za-z0-9 _-]"), "")}.json")
                 }

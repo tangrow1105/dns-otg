@@ -105,7 +105,8 @@ data class Service(
     val action: Action?,
 )
 
-data class RuleFolder(val pk: Int, val name: String, val action: Action?, val count: Int)
+/** [status] is the folder's own on/off (1/0) for it and its rules, also on a folder without a rule. */
+data class RuleFolder(val pk: Int, val name: String, val action: Action?, val count: Int, val status: Int = 1)
 
 data class Rule(val hostname: String, val group: Int, val order: Int, val action: Action?, val comment: String?, val updated: Long = 0)
 
@@ -356,16 +357,23 @@ data class TimeRange(
     /** A user-picked date range: refreshing re-fetches it instead of moving it to "now". */
     val custom: Boolean = false,
     val tick: Int = 0,
+    /** The end of a picked range's last day: while that day is today, refreshing grows the range up to now. */
+    val until: Long? = null,
 ) {
     val startIso: String get() = iso(end - seconds * 1000)
     val endIso: String get() = iso(end)
 
-    /** Same window ending now (so a refresh picks up new data). */
-    fun refreshed() = if (custom) copy(tick = tick + 1) else copy(end = System.currentTimeMillis())
+    /** Same window ending now (so a refresh picks up new data); a picked range keeps its start. */
+    fun refreshed() = if (!custom) copy(end = System.currentTimeMillis()) else {
+        // In whole seconds, as [seconds] counts, so the start doesn't creep forward with each refresh.
+        val step = (minOf(until ?: end, System.currentTimeMillis()) - end).coerceAtLeast(0) / 1000
+        copy(end = end + step * 1000, seconds = seconds + step, tick = tick + 1)
+    }
 
     companion object {
         private fun iso(ms: Long) = java.time.Instant.ofEpochMilli(ms).toString()
-        val presets = listOf(
+        /** Built on each use, so each one ends now rather than when the app started. */
+        val presets get() = listOf(
             TimeRange("1h", 3600),
             TimeRange("24h", 86_400),
             TimeRange("7d", 7 * 86_400),

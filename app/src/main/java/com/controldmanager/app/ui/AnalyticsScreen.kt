@@ -73,7 +73,10 @@ private val StatBypassed get() = Palette.mix(Color(0xFF1BE3AD), Color(0xFF0FA678
 private val StatRedirected get() = Palette.mix(Color(0xFFE69201), Color(0xFFD08400))
 private val StatTotal get() = Palette.mix(Color(0xFFAAB8D9), Color(0xFF5C6D96))
 
-private data class SeriesDef(val action: Int, val label: String, val color: Color)
+private data class SeriesDef(val action: Int, val label: String, val color: Color) {
+    /** Redirected also counts spoofed queries (action 2), as its tile and the widgets do. */
+    fun of(p: SeriesPoint) = (p.counts[action] ?: 0) + (if (action == Do.REDIRECT) p.counts[Do.SPOOF] ?: 0 else 0)
+}
 
 private val chartSeries get() = listOf(
     SeriesDef(Do.BLOCK, "Blocked", StatBlocked),
@@ -100,6 +103,11 @@ private const val PREF_REGION = "analytics_region"
 
 private fun prefs(ctx: Context) = ctx.getSharedPreferences("controldmanager_ui", Context.MODE_PRIVATE)
 
+private val TimeRangeSaver = androidx.compose.runtime.saveable.listSaver<TimeRange, Any>(
+    save = { listOf(it.label, it.seconds, it.end, it.custom, it.until ?: 0L) },
+    restore = { TimeRange(it[0] as String, it[1] as Long, it[2] as Long, it[3] as Boolean, until = (it[4] as Long).takeIf { u -> u > 0 }).refreshed() },
+)
+
 /** The user's analytics region override, if they picked one. */
 fun regionOverride(ctx: Context): String? = null
 
@@ -112,14 +120,15 @@ fun AnalyticsScreen(nav: NavHostController) {
     val region = rememberLoader { session.analyticsRegion(null) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var rangeIdx by rememberSaveable { mutableIntStateOf(1) }
-    var range by remember { mutableStateOf(TimeRange.presets[1]) }
-    // Opened from a widget: Statistics, for the widget's period (a year isn't a preset, so it shows as a custom range).
+    // Kept with the chip through rotation and tab switches, and brought up to now when it comes back.
+    var range by rememberSaveable(stateSaver = TimeRangeSaver) { mutableStateOf(TimeRange.presets[1]) }
+    // Opened from a widget: Statistics, for the widget's period (a year isn't a preset, so it shows on the Custom chip).
     LaunchedEffect(OpenRequest.statsRange) {
         val (label, seconds) = OpenRequest.statsRange ?: return@LaunchedEffect
         OpenRequest.statsRange = null
         tab = 0
         rangeIdx = TimeRange.presets.indexOfFirst { it.label == label }
-        range = if (rangeIdx >= 0) TimeRange.presets[rangeIdx].refreshed() else TimeRange(label, seconds, custom = true)
+        range = if (rangeIdx >= 0) TimeRange.presets[rangeIdx] else TimeRange(label, seconds)
     }
     var pickDates by remember { mutableStateOf(false) }
     val refresh = { range = range.refreshed() }
@@ -218,10 +227,11 @@ private fun CustomRangeDialog(onDismiss: () -> Unit, onPick: (TimeRange) -> Unit
                     val sd = startDay!!
                     val ed = endDay ?: sd
                     val start = sd.atStartOfDay(zone).toInstant().toEpochMilli()
-                    val end = minOf(ed.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(), System.currentTimeMillis())
+                    val until = ed.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                    val end = minOf(until, System.currentTimeMillis())
                     val short = java.time.format.DateTimeFormatter.ofPattern("d MMM")
                     val label = if (sd == ed) sd.format(short) else "${sd.format(short)} – ${ed.format(short)}"
-                    onPick(TimeRange(label, (end - start) / 1000, end, custom = true))
+                    onPick(TimeRange(label, (end - start) / 1000, end, custom = true, until = until))
                     onDismiss()
                 },
             ) { Text("Done") }
@@ -770,7 +780,7 @@ private fun QueriesChart(points: List<SeriesPoint>, range: TimeRange, bars: Bool
     val measurer = rememberTextMeasurer()
     val axisStyle = TextStyle(color = Palette.Muted, fontSize = 10.sp)
     val maxY = remember(points, bars) {
-        niceMax(points.maxOfOrNull { p -> if (bars) chartSeries.sumOf { p.counts[it.action] ?: 0 } else chartSeries.maxOf { p.counts[it.action] ?: 0 } } ?: 0)
+        niceMax(points.maxOfOrNull { p -> if (bars) chartSeries.sumOf { it.of(p) } else chartSeries.maxOf { it.of(p) } } ?: 0)
     }
     val fmt = remember(range) { SimpleDateFormat(if (range.seconds <= 86_400) "HH:mm" else "d MMM", Locale.getDefault()) }
     val fullFmt = remember { SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()) }
@@ -785,7 +795,7 @@ private fun QueriesChart(points: List<SeriesPoint>, range: TimeRange, bars: Bool
         if (sel != null) chartSeries.forEach { d ->
             Box(Modifier.size(8.dp).clip(CircleShape).background(d.color))
             Spacer(Modifier.width(4.dp))
-            Text(compact(sel.counts[d.action] ?: 0), style = MaterialTheme.typography.labelMedium)
+            Text(compact(d.of(sel)), style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.width(10.dp))
         }
     }
@@ -833,7 +843,7 @@ private fun QueriesChart(points: List<SeriesPoint>, range: TimeRange, bars: Bool
                 var top = h
                 val bx = left + i * slot + (slot - bw) / 2
                 chartSeries.forEach { d ->
-                    val v = p.counts[d.action] ?: 0
+                    val v = d.of(p)
                     if (v > 0) {
                         val bh = (v.toFloat() / maxY) * h
                         drawRect(d.color.copy(alpha = if (selected == null || selected == i) 1f else 0.45f), Offset(bx, top - bh), androidx.compose.ui.geometry.Size(bw, bh))
@@ -844,7 +854,7 @@ private fun QueriesChart(points: List<SeriesPoint>, range: TimeRange, bars: Bool
         } else chartSeries.forEach { d ->
             val path = Path()
             points.forEachIndexed { i, p ->
-                val px = x(i); val py = y(p.counts[d.action] ?: 0)
+                val px = x(i); val py = y(d.of(p))
                 if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
             }
             drawPath(path, d.color, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
@@ -853,7 +863,7 @@ private fun QueriesChart(points: List<SeriesPoint>, range: TimeRange, bars: Bool
         if (!bars) selected?.let { i ->
             drawLine(Palette.Muted.copy(alpha = 0.7f), Offset(x(i), 0f), Offset(x(i), h), strokeWidth = 1.dp.toPx())
             chartSeries.forEach { d ->
-                val c = Offset(x(i), y(points[i].counts[d.action] ?: 0))
+                val c = Offset(x(i), y(d.of(points[i])))
                 drawCircle(Palette.Card, radius = 6.dp.toPx(), center = c)
                 drawCircle(d.color, radius = 4.dp.toPx(), center = c)
             }
@@ -1057,7 +1067,6 @@ private fun ActivityLogView(
     val atTop by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 } }
     // Live queries waiting for the reader to come back to the top.
     var newAbove by remember(region, range, query) { mutableIntStateOf(0) }
-    var liveRetry by remember { mutableIntStateOf(0) }
     // A finger on the list: rows moving under it would cancel the tap or long-press it started.
     var touching by remember { mutableStateOf(false) }
 
@@ -1110,14 +1119,17 @@ private fun ActivityLogView(
         false
     }
 
-    LaunchedEffect(region, range, query, liveWanted, liveRetry) {
+    LaunchedEffect(region, range, query, liveWanted) {
         if (!liveWanted) {
             live = LiveState.Off
             newAbove = 0
             if (entries.isEmpty() && !done) loadNext()
             return@LaunchedEffect
         }
+        // Coming back to the app doesn't try again after a lasting failure; turning Live off and on (or a new filter) does.
+        var failed = false
         lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            if (failed) return@repeatOnLifecycle
             var failures = 0
             while (true) {
                 // A session replaces the list with the newest page, so it waits until nobody is reading further down.
@@ -1139,7 +1151,7 @@ private fun ActivityLogView(
                     // Without the stream, still show the history.
                     if (entries.isEmpty() && !done) loadNext()
                     // The API token can't get a live log ticket (or read the log): trying again won't change that.
-                    if (e is ApiException && e.code in setOf(401, 403, 404)) { live = LiveState.Failed; return@repeatOnLifecycle }
+                    if (e is ApiException && e.code in setOf(401, 403, 404)) { live = LiveState.Failed; failed = true; return@repeatOnLifecycle }
                     failures = if (ranAWhile()) 1 else failures + 1
                 }
                 // Network trouble (a lift, a tunnel, switching Wi-Fi) passes, so keep trying, less and less often.
@@ -1197,7 +1209,6 @@ private fun ActivityLogView(
             // A custom range is in the past, so there is nothing to stream into it.
             if (!range.custom) LiveChip(live, newAbove) {
                 when {
-                    live == LiveState.Failed -> liveRetry++
                     // "Live · 12 new": take the reader up to them.
                     live == LiveState.On && newAbove > 0 -> loadScope.launch { listState.animateScrollToItem(0) }
                     else -> liveOn = !liveOn
@@ -1372,7 +1383,7 @@ private fun LiveChip(state: LiveState, newAbove: Int, onClick: () -> Unit) {
         label = {
             Text(
                 when {
-                    failed -> "Live · retry"
+                    failed -> "Live · failed"
                     state == LiveState.Reconnecting -> "Reconnecting"
                     state == LiveState.Paused -> "Live · paused"
                     state == LiveState.On && newAbove > 0 -> "Live · ${if (newAbove > 999) "999+" else newAbove} new"
@@ -1582,7 +1593,11 @@ private fun rcode(c: Int) = when (c) {
 
 /** Loaded queries as CSV (Export / Copy), columns as the dashboard's export. */
 private fun logCsv(entries: List<LogEntry>, endpoint: (LogEntry) -> String, client: (LogEntry) -> String?): String {
-    fun cell(s: String) = if (s.any { it == ',' || it == '"' || it == '\n' }) "\"" + s.replace("\"", "\"\"") + "\"" else s
+    // Any device can make Control D log any name, and a spreadsheet would run one starting with = + - @ as a formula.
+    fun cell(raw: String): String {
+        val s = if (raw.length > 1 && raw[0] in setOf('=', '+', '-', '@')) "'$raw" else raw
+        return if (s.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + s.replace("\"", "\"\"") + "\"" else s
+    }
     val head = listOf("Time", "Domain", "Type", "Action", "Trigger", "Trigger Value", "Protocol", "Response", "Endpoint", "Client", "Source IP", "Country", "City", "ISP")
     return buildString {
         appendLine(head.joinToString(","))

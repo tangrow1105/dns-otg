@@ -50,8 +50,13 @@ private suspend fun loadStatus(): Status = withContext(Dispatchers.IO) {
         val latency = async { getBody("https://dns-latency.controld.com/info") }
         val d = detect.await()
         val l = latency.await()
+        val ip4 = v4.await()
+        val ip6 = v6.await()
+        // The detect name only resolves through Control D, so a missing answer there means "not using it". Nothing
+        // answering at all (offline, a captive portal) says nothing about the DNS, though.
+        if (d == null && l == null && ip4 == null && ip6 == null) throw java.io.IOException("Couldn't reach Control D to check. Try again.")
         Status(
-            v4.await(), v6.await(),
+            ip4, ip6,
             DnsStatus(
                 resolver = d?.optString("uid")?.takeIf { it.isNotBlank() },
                 protocol = d?.optString("protocol")?.takeIf { it.isNotBlank() },
