@@ -33,6 +33,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.keepScreenOn
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavHostController
 import com.controldmanager.app.api.*
@@ -1148,6 +1150,11 @@ private fun ActivityLogView(
         }
     }
 
+    // Live is for watching queries come in, so the screen stays on while they stream: not while it waits for the
+    // reader, reconnects or fails, and not once the screen pauses (a split-screen window losing focus stops the stream).
+    val resumed = lifecycle.currentStateAsState().value.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+    val keepScreenOn = live == LiveState.On && resumed
+
     val csvSaver = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("text/csv")
     ) { uri ->
@@ -1176,7 +1183,7 @@ private fun ActivityLogView(
         onDispose { setHeaderActions(null) }
     }
 
-    Column {
+    Column(if (keepScreenOn) Modifier.keepScreenOn() else Modifier) {
         if (selected.isNotEmpty()) {
             // Selection mode (long-press a row), like the dashboard's checkboxes.
             Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
