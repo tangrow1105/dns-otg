@@ -370,10 +370,11 @@ private fun WidgetPreview(cfg: WidgetConfig, s: WidgetStats, wide: Boolean, t: W
                     }
                     PreviewChart(s, Modifier.fillMaxWidth().weight(1f).padding(vertical = 6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        listOf(s.blocked to t.red, s.bypassed to t.green, s.redirected to t.orange).forEachIndexed { i, (n, c) ->
+                        listOf(Triple(s.blocked, t.red, "Block"), Triple(s.bypassed, t.green, "Allow"), Triple(s.redirected, t.orange, "Redir.")).forEachIndexed { i, (n, c, label) ->
                             if (i > 0) Spacer(Modifier.width(8.dp))
                             Text("●", color = c, fontSize = 9.sp)
                             Text(" ${compact(n)}", color = t.text, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            Text(" $label", color = t.muted, fontSize = 10.sp, maxLines = 1)
                         }
                     }
                 }

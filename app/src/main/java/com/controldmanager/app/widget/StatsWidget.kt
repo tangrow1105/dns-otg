@@ -394,14 +394,14 @@ private fun WidgetContent(context: Context, cfg: WidgetConfig, stats: WidgetStat
                         val chartW = (size.width - (cfg.padH * 2).dp - 118.dp - 12.dp).value.coerceAtLeast(40f)
                         val chartH = (size.height - (cfg.padV * 2).dp - 26.dp - 18.dp - 8.dp).value.coerceAtLeast(30f)
                         Chart(context, stats, chartW, chartH, GlanceModifier.fillMaxWidth().defaultWeight().padding(vertical = 4.dp))
-                        // Labels only when they fit; the colours already say which is which.
-                        val labels = size.width >= 320.dp
+                        // Always labelled (a coloured dot alone says nothing); the long word only where it fits.
+                        val redirect = if (size.width >= 320.dp) "Redirect" else "Redir."
                         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Legend("●", compact(stats.blocked), "Block".takeIf { labels }, c.red, c)
+                            Legend("●", compact(stats.blocked), "Block", c.red, c)
                             Spacer(GlanceModifier.width(8.dp))
-                            Legend("●", compact(stats.bypassed), "Allow".takeIf { labels }, c.green, c)
+                            Legend("●", compact(stats.bypassed), "Allow", c.green, c)
                             Spacer(GlanceModifier.width(8.dp))
-                            Legend("●", compact(stats.redirected), "Redirect".takeIf { labels }, c.orange, c)
+                            Legend("●", compact(stats.redirected), redirect, c.orange, c)
                         }
                     } else Spacer(GlanceModifier.defaultWeight())
                 }
