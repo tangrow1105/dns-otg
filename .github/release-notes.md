@@ -1,5 +1,8 @@
 **Install:** download `DNS-OTG-1.0.4.apk` below and open it on your phone (Android 8.0 or newer). It updates earlier versions in place and keeps you signed in.
 
+### Changed
+- **Simpler sign-in:** Open Control D takes you to the dashboard in your browser, where you sign in as usual (any account type) and create an API token, then the app uses it. The in-app login page is gone: it could come up blank on newer Android versions, and this way the app never sees your password or web session.
+
 ### Improved
 - Activity log: the screen stays on while Live is streaming, and goes back to normal when Live pauses or stops
 - Live: when the live log isn't available for your token, the chip says "Live · failed" and a tap turns it off
@@ -14,8 +17,6 @@
 - Failed exports no longer leave an empty file behind, and CSV exports are safe to open in spreadsheets
 - Messages like "Profile deleted" now show after the screen closes
 - Tapping back twice quickly no longer leaves an empty screen
-- Sign in with Control D: when the login page comes up blank (seen on newer Android versions), a "Use Chrome instead" button signs you in through Chrome
-- Web sign-in: a failed sign-in no longer leaves the dashboard session signed in
 - Widgets (beta): one update at a time, no more getting stuck on "Updating…", and they refresh after a storage region change
 
 Thanks to @karlohrvacic for all of these!

@@ -74,9 +74,13 @@ You don't need a Control D account to help: installing and keeping the app is en
 
 ## Signing in
 
-- **Sign in with Control D**: for email and password accounts. You sign in on Control D's own page inside the app, and the app creates its own API token named after your device, so you only do this once.
-- **Google accounts**: Google doesn't allow its sign-in inside apps, so tap **I sign in with Google**. The app opens the Control D dashboard in Chrome, where you create a Write token and copy it. Back in the app, tap **Use** on the copied token.
-- **API token**: paste any Control D API token. If one is on your clipboard when you open the app, it offers to use it.
+- Tap **Open Control D**. The dashboard's API page opens in your browser, where you sign in as usual (email and password, Google or SSO, with 2FA or passkeys).
+- Tap **+** to create a token, choose **Write**, and copy it.
+- Back in the app, tap **Use** on the copied token, or paste it into the token box.
+
+The app never sees your password: it only keeps the token you made.
+
+Already have a token? Tap **Paste an API token**. If one is on your clipboard when you open the app, it offers to use it.
 
 ## Privacy
 

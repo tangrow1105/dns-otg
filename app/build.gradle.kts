@@ -20,7 +20,7 @@ android {
         applicationId = "app.dnsotg"
         minSdk = 26
         targetSdk = 36
-        versionCode = 38
+        versionCode = 39
         versionName = "1.0.4"
     }
 
@@ -76,8 +76,6 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-svg:3.3.0")
     // Backdrop blur for the floating nav (frosted glass).
     implementation("dev.chrisbanes.haze:haze:1.6.10")
-    // Passkeys in the in-app Control D sign-in page.
-    implementation("androidx.webkit:webkit:1.14.0")
     // Dashboard opened in a Chrome tab inside the app (shares the Chrome sign-in).
     implementation("androidx.browser:browser:1.8.0")
     // Home screen widgets.

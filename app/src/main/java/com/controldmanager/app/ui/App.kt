@@ -253,10 +253,6 @@ private fun LoginScreen(onLoggedIn: (String, String?) -> Unit) {
     var manual by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var web by remember { mutableStateOf(false) }
-    var googleHelp by remember { mutableStateOf(false) }
-    // The browser route for any account: from the Google button, or when the in-app page doesn't work.
-    var browserFallback by remember { mutableStateOf(false) }
     var clipToken by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
@@ -292,14 +288,20 @@ private fun LoginScreen(onLoggedIn: (String, String?) -> Unit) {
         onDispose { lifecycle.removeObserver(obs) }
     }
 
-    if (web) {
-        WebSignIn(
-            onToken = { t -> web = false; connect(t) },
-            onGoogle = { web = false; browserFallback = false; googleHelp = true },
-            onCancel = { web = false },
-            onUseBrowser = { web = false; browserFallback = true; googleHelp = true },
-        )
-        return
+    // Sign-in happens on Control D's own dashboard in the user's browser (any account type, 2FA and passkeys
+    // included); the app only ever gets the API token they create there.
+    fun openDashboard() {
+        manual = true
+        runCatching {
+            androidx.browser.customtabs.CustomTabsIntent.Builder()
+                .setDefaultColorSchemeParams(
+                    androidx.browser.customtabs.CustomTabColorSchemeParams.Builder()
+                        .setToolbarColor(android.graphics.Color.parseColor("#080B17")).build(),
+                )
+                .setShowTitle(true)
+                .build()
+                .launchUrl(ctx, android.net.Uri.parse("https://controld.com/dashboard/api"))
+        }.onFailure { uri.openUri("https://controld.com/dashboard/api") }
     }
 
     Scaffold { pad ->
@@ -312,7 +314,7 @@ private fun LoginScreen(onLoggedIn: (String, String?) -> Unit) {
             Text("DNS OTG", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Manage your Control D profiles and endpoints on the go.", color = Palette.Muted)
             Text("Unofficial app, not affiliated with Control D.", color = Palette.Muted, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 6.dp))
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(28.dp))
 
             clipToken?.let { t ->
                 GroupRow(
@@ -324,30 +326,44 @@ private fun LoginScreen(onLoggedIn: (String, String?) -> Unit) {
                 Spacer(Modifier.height(16.dp))
             }
 
+            // How to get a token, always in view.
+            Column(
+                Modifier.fillMaxWidth().clip(CdShape).background(Palette.Card).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("Sign in with an API token", fontWeight = FontWeight.SemiBold)
+                listOf(
+                    "Tap Open Control D. The dashboard opens in your browser; sign in there if it asks (email, Google or SSO all work).",
+                    "Tap + to create a token, choose Write, then copy it.",
+                    "Come back here and tap Use on the copied token, or paste it below.",
+                ).forEachIndexed { i, step ->
+                    Row(verticalAlignment = Alignment.Top) {
+                        Box(Modifier.size(24.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Palette.Teal.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+                            Text("${i + 1}", color = Palette.Teal, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text(step, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
             CdButton(
-                "Sign in with Control D", { web = true }, Modifier.fillMaxWidth(),
+                "Open Control D", { openDashboard() }, Modifier.fillMaxWidth(),
                 iconContent = { Icon(painterResource(R.drawable.ic_sign_in), null, tint = Palette.Teal, modifier = Modifier.size(22.dp)) },
-                tint = Palette.Teal, height = 56.dp, busy = busy && clipToken == null && !manual,
+                tint = Palette.Teal, height = 56.dp,
             )
-            Text(
-                "For email & password accounts. The app creates its own API token, so you only sign in once.",
-                style = MaterialTheme.typography.bodySmall, color = Palette.Muted, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            )
-            Spacer(Modifier.height(20.dp))
-            CdButton("I sign in with Google", { browserFallback = false; googleHelp = true }, Modifier.fillMaxWidth(), icon = Solar.Global, height = 52.dp)
 
             error?.let {
                 Spacer(Modifier.height(12.dp))
                 Text(it, color = Palette.Red, style = MaterialTheme.typography.bodySmall)
             }
 
-            Spacer(Modifier.height(20.dp))
-            TextButton(onClick = { manual = !manual }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text(if (manual) "Hide" else "Paste an API token instead", color = Palette.Muted)
+            // The token box comes up once the browser has been opened (or for someone who already has a token).
+            if (!manual) TextButton(onClick = { manual = true }, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp)) {
+                Text("Paste an API token", color = Palette.Muted)
             }
             androidx.compose.animation.AnimatedVisibility(manual) {
-                Column {
+                Column(Modifier.padding(top = 16.dp)) {
                     CdTextField(
                         token, { token = it.trim(); error = null },
                         label = { Text("API token") },
@@ -375,57 +391,11 @@ private fun LoginScreen(onLoggedIn: (String, String?) -> Unit) {
             }
             Spacer(Modifier.height(16.dp))
             Text(
-                "Your token is encrypted with the Android Keystore and only sent to api.controld.com.",
+                "Your token is encrypted with the Android Keystore and only sent to api.controld.com. The app never sees your password.",
                 style = MaterialTheme.typography.bodySmall, color = Palette.Muted, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-    }
-
-    if (googleHelp) {
-        CdDialog(
-            onDismissRequest = { googleHelp = false },
-            title = { Text(if (browserFallback) "Sign in with Chrome" else "Signing in with Google") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        if (browserFallback) "Sign in on Control D's dashboard in Chrome, where the page works, and bring a token back:"
-                        else "Google doesn't allow its sign-in inside apps, so get a token from your browser instead:",
-                        color = Palette.Muted,
-                    )
-                    listOf(
-                        "Tap Open dashboard (it opens in Chrome, where you may already be signed in).",
-                        "Tap + to create a token, pick Write, then copy it.",
-                        "Close the Chrome tab and tap Use on the copied token.",
-                    ).forEachIndexed { i, s ->
-                        Row(verticalAlignment = Alignment.Top) {
-                            Box(Modifier.size(24.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Palette.Teal.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
-                                Text("${i + 1}", color = Palette.Teal, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            }
-                            Spacer(Modifier.width(10.dp))
-                            Text(s)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    googleHelp = false
-                    // A Chrome tab over the app: already signed in to Chrome, and closing it lands back here.
-                    runCatching {
-                        androidx.browser.customtabs.CustomTabsIntent.Builder()
-                            .setDefaultColorSchemeParams(
-                                androidx.browser.customtabs.CustomTabColorSchemeParams.Builder()
-                                    .setToolbarColor(android.graphics.Color.parseColor("#080B17")).build(),
-                            )
-                            .setShowTitle(true)
-                            .build()
-                            .launchUrl(ctx, android.net.Uri.parse("https://controld.com/dashboard/api"))
-                    }.onFailure { uri.openUri("https://controld.com/dashboard/api") }
-                }) { Text("Open dashboard") }
-            },
-            dismissButton = { TextButton(onClick = { googleHelp = false }) { Text("Cancel") } },
-        )
     }
 }
 
