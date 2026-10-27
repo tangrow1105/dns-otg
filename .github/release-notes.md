@@ -14,7 +14,7 @@
 - Failed exports no longer leave an empty file behind, and CSV exports are safe to open in spreadsheets
 - Messages like "Profile deleted" now show after the screen closes
 - Tapping back twice quickly no longer leaves an empty screen
-- Web sign-in: a failed sign-in no longer leaves the dashboard session signed in
+- Web sign-in: the login page loads reliably again, and a failed sign-in no longer leaves the dashboard session signed in
 - Widgets (beta): one update at a time, no more getting stuck on "Updating…", and they refresh after a storage region change
 
 Thanks to @karlohrvacic for all of these!

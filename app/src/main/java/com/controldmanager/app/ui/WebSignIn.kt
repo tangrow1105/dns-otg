@@ -92,10 +92,12 @@ fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> U
         if (w != null && w.canGoBack() && !settingUp) w.goBack() else onCancel()
     }
 
-    // Leaving before it finished (Cancel, back) mustn't leave the dashboard signed in for the next try.
+    // Leaving before it finished (Cancel, back) mustn't leave the dashboard signed in for the next try. Only the
+    // newest sign-in page clears: wiping the shared cookies and storage while a newer page loads breaks its login form.
+    val visit = remember { ++signInVisits }
     DisposableEffect(web) {
         val w = web
-        onDispose { w?.let(::clearWebSession) }
+        onDispose { if (visit == signInVisits) w?.let(::clearWebSession) }
     }
 
     // Watch for the session the page stores once the user has signed in.
@@ -168,7 +170,20 @@ fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> U
                                 view.evaluateJavascript(HOOK_PASSKEY_JS, null)
                             }
                         }
-                        loadUrl(LOGIN_URL)
+                        // Logged for bug reports: what the page itself complains about (a script or a blocked request).
+                        webChromeClient = object : android.webkit.WebChromeClient() {
+                            override fun onConsoleMessage(m: android.webkit.ConsoleMessage): Boolean {
+                                if (m.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR || m.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.WARNING)
+                                    android.util.Log.w("DnsOtgSignIn", "${m.messageLevel()}: ${m.message()} (${m.sourceId()}:${m.lineNumber()})")
+                                return true
+                            }
+                        }
+                        // The login page and its captcha run on more than one site; a browser allows their cookies too.
+                        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                        // A clean start, and only once the old cookies are really gone (removing them is asynchronous).
+                        val view = this
+                        WebStorage.getInstance().deleteAllData()
+                        CookieManager.getInstance().removeAllCookies { view.loadUrl(LOGIN_URL) }
                         web = this
                     }
                 },
@@ -249,6 +264,9 @@ private fun findToken(o: Any?): String? = when (o) {
     is String -> o.takeIf { it.startsWith("api.") }
     else -> null
 }
+
+/** Counts sign-in pages opened, so only the newest one clears the shared web session when it closes. */
+private var signInVisits = 0
 
 private fun clearWebSession(w: WebView) {
     CookieManager.getInstance().removeAllCookies(null)
