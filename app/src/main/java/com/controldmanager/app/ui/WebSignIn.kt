@@ -36,6 +36,9 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 private const val LOGIN_URL = "https://controld.com/login"
+
+/** Control D's analytics (PostHog) host, answered by the app on the sign-in page (see shouldInterceptRequest). */
+private const val ANALYTICS_HOST = "p.controld.com"
 private const val API = "https://api.controld.com"
 
 /** Reads the dashboard's login session from its storage (redux-persist JSON with a "sessionToken" field). */
@@ -162,6 +165,22 @@ fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> U
                                 if (host.endsWith("accounts.google.com")) { onGoogle(); return true }
                                 // Keep everything else on Control D (and its captcha / passkey helpers) inside the page.
                                 return false
+                            }
+                            // Control D's login page waits for its analytics service's feature flags (p.controld.com,
+                            // PostHog) before it draws the form. Tracker blocking (often Control D itself) refuses that
+                            // host, and the page then waits forever. The page gets an empty, successful answer here
+                            // instead, so the form shows and no analytics leave the phone from this page.
+                            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? {
+                                if (request.url.host != ANALYTICS_HOST) return null
+                                val path = request.url.path.orEmpty()
+                                val (type, body) = when {
+                                    path.endsWith(".js") -> "application/javascript" to ""
+                                    path.startsWith("/flags") || path.startsWith("/decide") ->
+                                        "application/json" to """{"flags":{},"featureFlags":{},"featureFlagPayloads":{},"errorsWhileComputingFlags":false}"""
+                                    else -> "application/json" to "{}"
+                                }
+                                val headers = mapOf("Access-Control-Allow-Origin" to "https://controld.com", "Access-Control-Allow-Credentials" to "true")
+                                return android.webkit.WebResourceResponse(type, "utf-8", 200, "OK", headers, body.byteInputStream())
                             }
                             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                                 loading = true
