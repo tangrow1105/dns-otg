@@ -1,5 +1,7 @@
 **Install:** download `DNS-OTG-1.0.4.apk` below and open it on your phone (Android 8.0 or newer). It updates earlier versions in place and keeps you signed in.
 
+**Sorry about sign-in!** On some newer Android versions, "Sign in with Control D" showed a blank page instead of the login form, so you couldn't sign in. This update fixes it with a simpler sign-in through your browser. Thanks for your patience.
+
 ### Changed
 - **Simpler sign-in:** Open Control D takes you to the dashboard in your browser, where you sign in as usual (any account type) and create an API token, then the app uses it. The in-app login page is gone: it could come up blank on newer Android versions, and this way the app never sees your password or web session.
 
