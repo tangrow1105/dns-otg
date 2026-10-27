@@ -255,6 +255,8 @@ private fun LoginScreen(onLoggedIn: (String, String?) -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var web by remember { mutableStateOf(false) }
     var googleHelp by remember { mutableStateOf(false) }
+    // The browser route for any account: from the Google button, or when the in-app page doesn't work.
+    var browserFallback by remember { mutableStateOf(false) }
     var clipToken by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
@@ -293,8 +295,9 @@ private fun LoginScreen(onLoggedIn: (String, String?) -> Unit) {
     if (web) {
         WebSignIn(
             onToken = { t -> web = false; connect(t) },
-            onGoogle = { web = false; googleHelp = true },
+            onGoogle = { web = false; browserFallback = false; googleHelp = true },
             onCancel = { web = false },
+            onUseBrowser = { web = false; browserFallback = true; googleHelp = true },
         )
         return
     }
@@ -332,7 +335,7 @@ private fun LoginScreen(onLoggedIn: (String, String?) -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
             Spacer(Modifier.height(20.dp))
-            CdButton("I sign in with Google", { googleHelp = true }, Modifier.fillMaxWidth(), icon = Solar.Global, height = 52.dp)
+            CdButton("I sign in with Google", { browserFallback = false; googleHelp = true }, Modifier.fillMaxWidth(), icon = Solar.Global, height = 52.dp)
 
             error?.let {
                 Spacer(Modifier.height(12.dp))
@@ -382,10 +385,14 @@ private fun LoginScreen(onLoggedIn: (String, String?) -> Unit) {
     if (googleHelp) {
         CdDialog(
             onDismissRequest = { googleHelp = false },
-            title = { Text("Signing in with Google") },
+            title = { Text(if (browserFallback) "Sign in with Chrome" else "Signing in with Google") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Google doesn't allow its sign-in inside apps, so get a token from your browser instead:", color = Palette.Muted)
+                    Text(
+                        if (browserFallback) "Sign in on Control D's dashboard in Chrome, where the page works, and bring a token back:"
+                        else "Google doesn't allow its sign-in inside apps, so get a token from your browser instead:",
+                        color = Palette.Muted,
+                    )
                     listOf(
                         "Tap Open dashboard (it opens in Chrome, where you may already be signed in).",
                         "Tap + to create a token, pick Write, then copy it.",

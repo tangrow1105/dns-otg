@@ -37,8 +37,6 @@ import kotlin.coroutines.suspendCoroutine
 
 private const val LOGIN_URL = "https://controld.com/login"
 
-/** Control D's analytics (PostHog) host, answered by the app on the sign-in page (see shouldInterceptRequest). */
-private const val ANALYTICS_HOST = "p.controld.com"
 private const val API = "https://api.controld.com"
 
 /** Reads the dashboard's login session from its storage (redux-persist JSON with a "sessionToken" field). */
@@ -84,12 +82,16 @@ private const val HOOK_PASSKEY_JS = """
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> Unit) {
+fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> Unit, onUseBrowser: () -> Unit) {
     var web by remember { mutableStateOf<WebView?>(null) }
     var loading by remember { mutableStateOf(true) }
     var settingUp by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var passkeyInfo by remember { mutableStateOf(false) }
+    // Control D's login page can come up blank inside an app (seen with Android 17's WebView: the form is built but
+    // never drawn). After a few seconds, a way out through the browser, where the page works.
+    var offerBrowser by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { delay(6000); offerBrowser = true }
     androidx.activity.compose.BackHandler {
         val w = web
         if (w != null && w.canGoBack() && !settingUp) w.goBack() else onCancel()
@@ -148,13 +150,14 @@ fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> U
             AndroidView(
                 factory = { ctx ->
                     WebView(ctx).apply {
-                        // TEMPORARY, test builds only: lets chrome://inspect open this page. Remove before release.
-                        WebView.setWebContentsDebuggingEnabled(true)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
-                        // No passkey support here: controld.com's passkeys can't work inside an app's page, and with
-                        // it turned on (newer WebViews offer it) the login page waits on a passkey check that never
-                        // answers and never shows its form. Passkey taps get an explanation instead (below).
+                        // Passkeys, where this phone's WebView supports them.
+                        if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_AUTHENTICATION)) {
+                            androidx.webkit.WebSettingsCompat.setWebAuthenticationSupport(
+                                settings, androidx.webkit.WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_APP,
+                            )
+                        }
                         addJavascriptInterface(object {
                             @android.webkit.JavascriptInterface
                             fun passkeyTapped() { post { passkeyInfo = true } }
@@ -166,31 +169,9 @@ fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> U
                                 // Keep everything else on Control D (and its captcha / passkey helpers) inside the page.
                                 return false
                             }
-                            // Control D's login page waits for its analytics service's feature flags (p.controld.com,
-                            // PostHog) before it draws the form. Tracker blocking (often Control D itself) refuses that
-                            // host, and the page then waits forever. The page gets an empty, successful answer here
-                            // instead, so the form shows and no analytics leave the phone from this page.
-                            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? {
-                                if (request.url.host != ANALYTICS_HOST) return null
-                                val path = request.url.path.orEmpty()
-                                val (type, body) = when {
-                                    path.endsWith(".js") -> "application/javascript" to ""
-                                    path.startsWith("/flags") || path.startsWith("/decide") ->
-                                        "application/json" to """{"flags":{},"featureFlags":{},"featureFlagPayloads":{},"errorsWhileComputingFlags":false}"""
-                                    else -> "application/json" to "{}"
-                                }
-                                val headers = mapOf("Access-Control-Allow-Origin" to "https://controld.com", "Access-Control-Allow-Credentials" to "true")
-                                return android.webkit.WebResourceResponse(type, "utf-8", 200, "OK", headers, body.byteInputStream())
-                            }
-                            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                                loading = true
-                                android.util.Log.w("DnsOtgSignIn", "page: $url")
-                            }
+                            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) { loading = true }
                             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
                                 android.util.Log.w("DnsOtgSignIn", "load failed (${error.errorCode} ${error.description}): ${request.url}")
-                            }
-                            override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: android.webkit.WebResourceResponse) {
-                                android.util.Log.w("DnsOtgSignIn", "HTTP ${response.statusCode}: ${request.url}")
                             }
                             override fun onPageFinished(view: WebView, url: String?) {
                                 loading = false
@@ -200,12 +181,11 @@ fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> U
                         // Logged for bug reports: what the page itself complains about (a script or a blocked request).
                         webChromeClient = object : android.webkit.WebChromeClient() {
                             override fun onConsoleMessage(m: android.webkit.ConsoleMessage): Boolean {
-                                android.util.Log.w("DnsOtgSignIn", "${m.messageLevel()}: ${m.message()} (${m.sourceId()}:${m.lineNumber()})")
+                                if (m.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR)
+                                    android.util.Log.w("DnsOtgSignIn", "${m.message()} (${m.sourceId()}:${m.lineNumber()})")
                                 return true
                             }
                         }
-                        // The login page and its captcha run on more than one site; a browser allows their cookies too.
-                        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                         // A clean start, and only once the old cookies are really gone (removing them is asynchronous).
                         val view = this
                         WebStorage.getInstance().deleteAllData()
@@ -226,6 +206,13 @@ fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> U
                 },
                 confirmButton = { androidx.compose.material3.TextButton(onClick = { passkeyInfo = false }) { Text("OK") } },
             )
+            if (offerBrowser && !settingUp) Row(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Palette.Card).padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Page blank or not working?", color = Palette.Muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                androidx.compose.material3.TextButton(onClick = onUseBrowser) { Text("Use Chrome instead", color = Palette.Teal) }
+            }
             if (settingUp) {
                 Column(
                     Modifier.fillMaxSize().background(Palette.Bg.copy(alpha = 0.92f)),
