@@ -147,12 +147,9 @@ fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> U
                     WebView(ctx).apply {
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
-                        // Passkeys, where this phone's WebView supports them.
-                        if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_AUTHENTICATION)) {
-                            androidx.webkit.WebSettingsCompat.setWebAuthenticationSupport(
-                                settings, androidx.webkit.WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_APP,
-                            )
-                        }
+                        // No passkey support here: controld.com's passkeys can't work inside an app's page, and with
+                        // it turned on (newer WebViews offer it) the login page waits on a passkey check that never
+                        // answers and never shows its form. Passkey taps get an explanation instead (below).
                         addJavascriptInterface(object {
                             @android.webkit.JavascriptInterface
                             fun passkeyTapped() { post { passkeyInfo = true } }
@@ -164,7 +161,16 @@ fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> U
                                 // Keep everything else on Control D (and its captcha / passkey helpers) inside the page.
                                 return false
                             }
-                            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) { loading = true }
+                            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                                loading = true
+                                android.util.Log.w("DnsOtgSignIn", "page: $url")
+                            }
+                            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
+                                android.util.Log.w("DnsOtgSignIn", "load failed (${error.errorCode} ${error.description}): ${request.url}")
+                            }
+                            override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: android.webkit.WebResourceResponse) {
+                                android.util.Log.w("DnsOtgSignIn", "HTTP ${response.statusCode}: ${request.url}")
+                            }
                             override fun onPageFinished(view: WebView, url: String?) {
                                 loading = false
                                 view.evaluateJavascript(HOOK_PASSKEY_JS, null)
@@ -173,8 +179,7 @@ fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> U
                         // Logged for bug reports: what the page itself complains about (a script or a blocked request).
                         webChromeClient = object : android.webkit.WebChromeClient() {
                             override fun onConsoleMessage(m: android.webkit.ConsoleMessage): Boolean {
-                                if (m.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR || m.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.WARNING)
-                                    android.util.Log.w("DnsOtgSignIn", "${m.messageLevel()}: ${m.message()} (${m.sourceId()}:${m.lineNumber()})")
+                                android.util.Log.w("DnsOtgSignIn", "${m.messageLevel()}: ${m.message()} (${m.sourceId()}:${m.lineNumber()})")
                                 return true
                             }
                         }
