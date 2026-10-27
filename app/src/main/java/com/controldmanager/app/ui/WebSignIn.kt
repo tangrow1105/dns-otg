@@ -92,14 +92,23 @@ fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> U
         if (w != null && w.canGoBack() && !settingUp) w.goBack() else onCancel()
     }
 
+    // Leaving before it finished (Cancel, back) mustn't leave the dashboard signed in for the next try.
+    DisposableEffect(web) {
+        val w = web
+        onDispose { w?.let(::clearWebSession) }
+    }
+
     // Watch for the session the page stores once the user has signed in.
     LaunchedEffect(web) {
         val w = web ?: return@LaunchedEffect
         while (true) {
             delay(1000)
             if (settingUp) continue
+            // A page that can't run the script (mid-navigation) answers null, which isn't a session.
             val session = suspendCoroutine { c ->
-                w.evaluateJavascript(READ_SESSION_JS) { v -> c.resume(runCatching { JSONArray("[$v]").optString(0) }.getOrDefault("")) }
+                w.evaluateJavascript(READ_SESSION_JS) { v ->
+                    c.resume(runCatching { JSONArray("[$v]").let { if (it.isNull(0)) "" else it.optString(0) } }.getOrDefault(""))
+                }
             }
             if (session.isNotBlank()) {
                 settingUp = true
@@ -110,6 +119,8 @@ fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> U
                     return@LaunchedEffect
                 } catch (e: Exception) {
                     error = "Signed in, but couldn't create an API token: ${e.message}"
+                    // Clearing the cookies alone would leave the session valid on Control D's side.
+                    withContext(Dispatchers.IO) { runCatching { call("POST", "/users/logout", session) } }
                     clearWebSession(w)
                     settingUp = false
                     w.loadUrl(LOGIN_URL)
@@ -214,7 +225,8 @@ private fun call(method: String, path: String, session: String, json: JSONObject
 private suspend fun tokenFromSession(session: String): String = withContext(Dispatchers.IO) {
     val types = runCatching { call("GET", "/token/types", session).optJSONObject("types") }.getOrNull()
     val type = types?.keys()?.asSequence()?.toList()?.let { keys ->
-        keys.firstOrNull { k -> (types.optString(k) + k).contains("write", true) } ?: keys.firstOrNull()
+        keys.firstOrNull { it.equals("write", true) }
+            ?: keys.firstOrNull { k -> (types.optString(k) + k).contains("write", true) } ?: keys.firstOrNull()
     } ?: "write"
     val name = "DNS OTG – ${Build.MODEL}".take(40)
     val created = call("POST", "/token", session, JSONObject().put("name", name).put("type", type))

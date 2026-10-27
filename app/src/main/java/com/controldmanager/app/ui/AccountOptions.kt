@@ -42,6 +42,7 @@ fun AccountOptions(user: User?, onUserChanged: () -> Unit) {
     val session = LocalSession.current
     val runner = rememberRunner()
     val uri = LocalUriHandler.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val regions = rememberLoader { runCatching { session.api.analyticsRegions() }.getOrDefault(emptyList()) }
     val region = user?.statsRegion
     val retention = rememberLoader(region) {
@@ -151,6 +152,8 @@ fun AccountOptions(user: User?, onUserChanged: () -> Unit) {
                     runner.run("Storage region changed", onDone = onUserChanged) {
                         session.api.setStorageRegion(pk, c)
                         session.forgetRegion()
+                        // Widgets keep their own copy of the region; this makes them look it up again.
+                        com.controldmanager.app.widget.refreshAllWidgets(ctx)
                     }
                 }) { Text("Change") }
             },

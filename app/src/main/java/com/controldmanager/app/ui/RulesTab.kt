@@ -125,10 +125,7 @@ fun RulesTab(nav: NavHostController, pid: String) {
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
         val f = exportFolder ?: return@rememberLauncherForActivityResult
-        if (uri != null) runner.run("Folder exported") {
-            val json = session.api.exportFolder(pid, f.pk).toString(2)
-            ctx.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) } ?: throw IllegalStateException("Couldn't write the file")
-        }
+        if (uri != null) runner.run("Folder exported") { writeNewDocument(ctx, uri) { session.api.exportFolder(pid, f.pk).toString(2) } }
     }
 
     Column {
@@ -215,10 +212,7 @@ fun FolderScreen(nav: NavHostController, pid: String, fid: Int) {
     val exporter = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
-        if (uri != null) runner.run("Folder exported") {
-            val json = session.api.exportFolder(pid, fid).toString(2)
-            ctx.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) } ?: throw IllegalStateException("Couldn't write the file")
-        }
+        if (uri != null) runner.run("Folder exported") { writeNewDocument(ctx, uri) { session.api.exportFolder(pid, fid).toString(2) } }
     }
 
     Scaffold(
@@ -774,8 +768,10 @@ private fun FolderEditorDialog(
         },
         confirmButton = {
             TextButton(enabled = valid && !busy, onClick = {
-                val action = if (!ruleOn || bypassMagic) Action(-1, status = 1)
-                else Action(doType, when (doType) { Do.SPOOF -> spoofVia.trim(); Do.REDIRECT -> redirectVia; else -> null }, status = 1)
+                // Editing keeps the folder on or off as it was (it can be turned off on the dashboard).
+                val status = existing?.status ?: 1
+                val action = if (!ruleOn || bypassMagic) Action(-1, status = status)
+                else Action(doType, when (doType) { Do.SPOOF -> spoofVia.trim(); Do.REDIRECT -> redirectVia; else -> null }, status = status)
                 onSave(finalName, action)
             }) { BusyLabel(if (existing == null) "Create" else "Save", busy) }
         },

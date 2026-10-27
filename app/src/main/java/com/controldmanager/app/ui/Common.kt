@@ -226,8 +226,11 @@ class Loader<T>(private val scope: CoroutineScope, private val block: suspend ()
     /** Background refresh: no spinner, and a failure keeps the data already shown. */
     suspend fun refreshQuietly() {
         if (loading) return
+        val gen = generation
         try {
-            data = block()
+            val fresh = block()
+            // A reload() meanwhile (after a change) has newer data than this request.
+            if (gen == generation) data = fresh
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -322,12 +325,13 @@ class Runner(private val scope: CoroutineScope, private val snack: SnackbarHostS
             busy = true
             try {
                 block()
-                success?.let { scope.launch { snack.showSnackbar(it) } }
+                // On the app's scope: a screen that closes itself in onDone would otherwise take the message with it.
+                success?.let { AppToast.scope.launch { snack.showSnackbar(it) } }
                 onDone()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                scope.launch { snack.showSnackbar(e.message ?: "Something went wrong") }
+                AppToast.scope.launch { snack.showSnackbar(e.message ?: "Something went wrong") }
             } finally {
                 busy = false
             }
@@ -500,6 +504,20 @@ fun SwitchRow(
         }
         CdSwitch(checked = checked, onCheckedChange = onChange, enabled = enabled, busy = busy)
     }
+}
+
+/**
+ * Writes [text] into a file the user just made with CreateDocument. That file exists from the moment they picked
+ * the name, so when [text] fails (a request that didn't go through) it is removed rather than left empty.
+ */
+suspend fun writeNewDocument(ctx: Context, uri: android.net.Uri, text: suspend () -> String) {
+    val content = try {
+        text()
+    } catch (e: Exception) {
+        runCatching { android.provider.DocumentsContract.deleteDocument(ctx.contentResolver, uri) }
+        throw e
+    }
+    ctx.contentResolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) } ?: throw IllegalStateException("Couldn't write the file")
 }
 
 fun copyToClipboard(ctx: Context, label: String, text: String) {

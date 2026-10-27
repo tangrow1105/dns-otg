@@ -12,7 +12,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        OpenRequest.from(intent)
+        // A restored activity gets its first intent again, widget tap included; that tap was handled back then.
+        if (savedInstanceState == null) OpenRequest.from(intent)
         setContent { CdApp() }
     }
 

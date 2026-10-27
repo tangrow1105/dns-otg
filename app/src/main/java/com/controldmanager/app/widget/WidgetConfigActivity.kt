@@ -81,9 +81,11 @@ class WidgetConfigActivity : ComponentActivity() {
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) { finish(); return }
         enableEdgeToEdge()
         val manager = AppWidgetManager.getInstance(this)
+        // A widget removed meanwhile (or an id that was never one) has nothing to set up.
+        val info = manager.getAppWidgetInfo(widgetId) ?: run { finish(); return }
         // The preview takes the widget's shape: wide when it is the activity widget or has been stretched wide.
         val wide = manager.getAppWidgetOptions(widgetId).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) >= 250 ||
-            manager.getAppWidgetInfo(widgetId)?.provider?.className?.endsWith("WideReceiver") == true
+            info.provider.className.endsWith("WideReceiver")
         val glanceId = GlanceAppWidgetManager(this).getGlanceIdBy(widgetId)
         lifecycleScope.launch {
             val state = getAppWidgetState(this@WidgetConfigActivity, PreferencesGlanceStateDefinition, glanceId)
@@ -175,7 +177,11 @@ class WidgetConfigActivity : ComponentActivity() {
                 Column(Modifier.fillMaxWidth().weight(1f).hazeSource(haze).background(Palette.Bg).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp)) {
                     if (!signedIn) {
                         Text("Sign in to DNS OTG first, then come back to set up this widget.", color = Palette.Muted, modifier = Modifier.padding(12.dp))
-                        CdButton("Open DNS OTG", { startActivity(Intent(this@WidgetConfigActivity, MainActivity::class.java)); finish() }, Modifier.fillMaxWidth())
+                        // Its own task: this screen runs in the launcher's, where the app would vanish on Home.
+                        CdButton("Open DNS OTG", {
+                            startActivity(Intent(this@WidgetConfigActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            finish()
+                        }, Modifier.fillMaxWidth())
                         return@Column
                     }
                     // What and when: each row names the setting, with its value in green beneath, as the launcher's lists.

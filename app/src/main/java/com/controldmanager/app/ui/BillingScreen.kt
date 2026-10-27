@@ -273,12 +273,17 @@ private fun printReceipt(ctx: android.content.Context, r: Receipt) {
         </div></body></html>
     """.trimIndent()
     val web = android.webkit.WebView(ctx)
+    printingReceipt = web
     web.webViewClient = object : android.webkit.WebViewClient() {
         override fun onPageFinished(view: android.webkit.WebView, url: String?) {
             val pm = ctx.getSystemService(android.content.Context.PRINT_SERVICE) as android.print.PrintManager
             val name = "ControlD-receipt-${r.date}"
             pm.print(name, view.createPrintDocumentAdapter(name), android.print.PrintAttributes.Builder().build())
+            if (printingReceipt === view) printingReceipt = null
         }
     }
     web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
 }
+
+/** The receipt page until it is handed to the print screen; with no reference it can be collected before it loads. */
+private var printingReceipt: android.webkit.WebView? = null

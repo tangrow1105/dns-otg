@@ -540,7 +540,8 @@ class ControlDApi(private val token: String, private val orgId: String?) {
 
     suspend fun folders(profileId: String): List<RuleFolder> =
         call("GET", "/profiles/$profileId/groups").optJSONArray("groups").objects().map {
-            RuleFolder(it.optInt("PK"), it.optString("group"), Action.parse(it.optJSONObject("action")), it.optInt("count"))
+            val action = it.optJSONObject("action")
+            RuleFolder(it.optInt("PK"), it.optString("group"), Action.parse(action), it.optInt("count"), action?.optInt("status", 1) ?: 1)
         }
 
     suspend fun createFolder(profileId: String, name: String, action: Action) {

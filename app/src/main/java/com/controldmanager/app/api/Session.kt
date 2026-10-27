@@ -81,6 +81,12 @@ class Session(val api: ControlDApi, val orgId: String?) {
 
     private var filterNames: Map<String, String>? = null
     private var filterParents: Map<String, String> = emptyMap()
+    // One fetch at a time: callers that arrive meanwhile (one per endpoint on Analytics) get its result.
+    private val filterLock = Mutex()
+    // After an incomplete fetch: what did come, until it is asked for again a minute later (the live log asks
+    // several times a second, so not on every call).
+    private var partialNames: Map<String, String> = emptyMap()
+    private var partialAt = 0L
 
     /** Native filter id for a mode id (ads_medium → ads), used for the filter's icon. */
     suspend fun filterParent(id: String): String? { filterNames(); return mutex.withLock { filterParents[id] } }
@@ -89,20 +95,27 @@ class Session(val api: ControlDApi, val orgId: String?) {
      * Display names for filter ids seen in analytics, as the dashboard shows them:
      * "Ads & Trackers - Balanced" for a filter mode, the list's own name for 3rd-party filters.
      */
-    suspend fun filterNames(): Map<String, String> {
-        mutex.withLock { filterNames }?.let { return it }
-        val pid = runCatching { api.profiles().firstOrNull()?.pk }.getOrNull() ?: return emptyMap()
+    suspend fun filterNames(): Map<String, String> = filterLock.withLock {
+        mutex.withLock { filterNames ?: partialNames.takeIf { System.currentTimeMillis() - partialAt < 60_000 } }?.let { return@withLock it }
+        fun <T> Result<T>.orNullUnlessCancelled() = onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }.getOrNull()
+        val pid = runCatching { api.profiles().firstOrNull()?.pk }.orNullUnlessCancelled()
+        val native = pid?.let { runCatching { api.nativeFilters(it) }.orNullUnlessCancelled() }
+        val external = pid?.let { runCatching { api.externalFilters(it) }.orNullUnlessCancelled() }
         val map = mutableMapOf<String, String>()
         val parents = mutableMapOf<String, String>()
-        runCatching { api.nativeFilters(pid) }.getOrNull()?.forEach { f ->
+        native?.forEach { f ->
             map[f.pk] = f.name
             parents[f.pk] = f.pk
             f.levels.forEach { l -> map[l.name] = "${f.name} - ${l.title}"; parents[l.name] = f.pk }
         }
-        mutex.withLock { filterParents = parents }
-        runCatching { api.externalFilters(pid) }.getOrNull()?.forEach { f -> map[f.pk] = f.name }
-        mutex.withLock { filterNames = map }
-        return map
+        external?.forEach { f -> map[f.pk] = f.name }
+        mutex.withLock {
+            filterParents = parents
+            // Kept for good only when both lists came: after a failure, raw ids get their names on a later try.
+            if (native != null && external != null) filterNames = map
+            else { partialNames = map; partialAt = System.currentTimeMillis() }
+        }
+        map
     }
 
     /** Every service in the catalog, keyed by PK (used to name analytics entries). */

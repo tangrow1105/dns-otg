@@ -236,7 +236,8 @@ fun BackTopBar(nav: NavHostController, title: String, subtitle: String? = null, 
                 subtitle?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = Palette.Muted, maxLines = 1) }
             }
         },
-        navigationIcon = { IconButton(onClick = { nav.popBackStack() }) { Icon(Solar.ArrowBack, "Back") } },
+        // A second tap while the screen slides away would pop the screen under it too, down to an empty app.
+        navigationIcon = { IconButton(onClick = { if (nav.previousBackStackEntry != null) nav.popBackStack() }) { Icon(Solar.ArrowBack, "Back") } },
         actions = actions,
         colors = cdTopBarColors(),
     )
