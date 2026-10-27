@@ -145,6 +145,8 @@ fun WebSignIn(onToken: (String) -> Unit, onGoogle: () -> Unit, onCancel: () -> U
             AndroidView(
                 factory = { ctx ->
                     WebView(ctx).apply {
+                        // TEMPORARY, test builds only: lets chrome://inspect open this page. Remove before release.
+                        WebView.setWebContentsDebuggingEnabled(true)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         // No passkey support here: controld.com's passkeys can't work inside an app's page, and with
