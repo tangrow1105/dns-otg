@@ -1,5 +1,8 @@
 **Install:** download `DNS-OTG-1.0.5.apk` below and open it on your phone (Android 8.0 or newer). It updates earlier versions in place and keeps you signed in.
 
+### New
+- **Set up an iPhone or Mac:** on an endpoint's Resolvers screen, tap iPhone / Mac to send a setup file. Opening it on the Apple device installs Control D for that endpoint. (Idea from @karlohrvacic, thanks!)
+
 ### Fixed
 - Profile options: Safe Search and Restricted YouTube can be switched on and off again
 - Profile options: EDNS Client Subnet saves its choice (No ECS, Auto or Custom)
