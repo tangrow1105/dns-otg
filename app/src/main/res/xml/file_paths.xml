@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Files the app shares with other apps: only the Apple setup profile, made in the cache. -->
+<paths>
+    <cache-path name="shared" path="shared/" />
+</paths>

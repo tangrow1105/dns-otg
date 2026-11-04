@@ -434,6 +434,12 @@ fun EndpointResolversScreen(nav: NavHostController, id: String) {
                 else ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(setupGuideUrl(icon))))
             },
         ),
+        // From Karlo's ideas (issue #5): set up a family member's iPhone or Mac from here.
+        GlassAction(
+            "iPhone / Mac", icon = Solar.FileUpload,
+            enabled = loader.data?.resolvers?.doh != null,
+            onClick = { loader.data?.let { shareAppleProfile(ctx, it) } },
+        ),
     ))
 
     Scaffold(
