@@ -84,7 +84,8 @@ internal fun YouTubeProxyCard(pid: String) {
                     }
                     Text(
                         "Enjoy YouTube with fewer ads, with a little help from Control D's Albania location. YouTube sees you in " +
-                            "Albania, where it shows fewer ads; recommendations and language can change to Albania's.",
+                            "Albania, where it shows fewer ads; recommendations and language can change to Albania's. YouTube Music " +
+                            "plays through Albania too, so some songs may not be available.",
                         style = MaterialTheme.typography.bodySmall, color = Palette.Muted,
                     )
                 }

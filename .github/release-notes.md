@@ -4,7 +4,7 @@
 - **Set up an iPhone or Mac:** on an endpoint's Resolvers screen, Help Me Configure can now send a setup file. Opening it on the iPhone, iPad or Mac installs Control D for that endpoint.
 - **Control D network status** in Preferences: whether all of Control D's locations are up, with API, DNS and proxy for each, and which one serves you
 - **Filter levels change in one request,** like the dashboard, so a switch can't be left half done. Malware's levels now stack the way Control D's do (Balanced adds IP malware, Strict adds AI malware).
-- **YouTube Ad Blocking (beta)** in the 3rd party tab: YouTube goes through Control D's Albania location, where it shows fewer ads. It uses its own Custom Rules folder, so turning it off puts everything back.
+- **YouTube Ad Blocking (beta)** in the 3rd party tab: YouTube goes through Control D's Albania location, where it shows fewer ads. YouTube Music plays through Albania too, so some songs may not be available. It uses its own Custom Rules folder, so turning it off puts everything back.
 
 Ideas from @karlohrvacic's issue, thanks!
 
