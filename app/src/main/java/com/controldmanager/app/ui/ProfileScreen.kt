@@ -2,6 +2,8 @@
 
 package com.controldmanager.app.ui
 
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -145,20 +147,36 @@ private fun FiltersTab(pid: String) {
     }
 }
 
-/** Enables/disables a filter, handling filters with modes (levels) such as Relaxed/Balanced/Strict. */
+/**
+ * Turns a native filter on or off, or changes its level, as the dashboard does: one request with the level ("lvl"),
+ * so a switch can't be left half done. Malware's levels stack instead (Balanced adds IP malware to Relaxed, Strict
+ * adds AI malware), so each of its parts is switched on or off by itself.
+ */
 private suspend fun applyFilter(api: ControlDApi, pid: String, f: Filter, enable: Boolean, level: FilterLevel? = null): Filter {
     if (f.levels.isEmpty()) {
-        api.setFilter(pid, f.pk, enable)
+        api.setFilterAction(pid, f.pk, enable)
         return f.copy(status = if (enable) 1 else 0)
     }
+    if (f.pk == "malware") {
+        val target = if (!enable) -1 else f.levels.indexOf(level ?: f.activeLevel ?: f.levels.first())
+        coroutineScope {
+            f.levels.forEachIndexed { i, l ->
+                val want = i <= target
+                if (want == (l.status == 1)) return@forEachIndexed
+                launch {
+                    if (l.type == "option") api.setOption(pid, l.name, want, if (want) l.optValue ?: "0.7" else null)
+                    else api.setFilterPart(pid, l.type, l.name, want)
+                }
+            }
+        }
+        return f.copy(status = if (enable) 1 else 0, levels = f.levels.mapIndexed { i, l -> l.copy(status = if (i <= target) 1 else 0) })
+    }
     if (!enable) {
-        val on = f.levels.filter { it.status == 1 }.map { it.name } + (if (f.status == 1) listOf(f.pk) else emptyList())
-        on.distinct().forEach { api.setFilter(pid, it, false) }
+        api.setFilterAction(pid, f.pk, false)
         return f.copy(status = 0, levels = f.levels.map { it.copy(status = 0) })
     }
     val target = level ?: f.activeLevel ?: f.levels.first()
-    f.levels.filter { it.status == 1 && it.name != target.name }.forEach { api.setFilter(pid, it.name, false) }
-    api.setFilter(pid, target.name, true)
+    api.setFilterAction(pid, f.pk, true, target.name)
     return f.copy(status = 1, levels = f.levels.map { it.copy(status = if (it.name == target.name) 1 else 0) })
 }
 

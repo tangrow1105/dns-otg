@@ -160,6 +160,7 @@ private fun MainScaffold(onLogout: () -> Unit) {
             composable("account") { AccountScreen(nav, onLogout) }
             composable("billing") { BillingScreen(nav) }
             composable("domain-test") { DomainTestScreen(nav) }
+            composable("network") { NetworkScreen(nav) }
             composable("account-settings") { AccountSettingsScreen(nav) }
             composable("profile/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
                 ProfileScreen(nav, it.arguments!!.getString("id")!!)
@@ -506,6 +507,9 @@ private fun AccountScreen(nav: NavHostController, onLogout: () -> Unit) {
 
             // Same as controld.com/config: what this device looks like to Control D.
             StatusSection()
+            // Whether Control D's own locations are up, so a problem on their side is easy to spot.
+            Spacer(Modifier.height(12.dp))
+            NetworkStatusRow(nav)
 
             Spacer(Modifier.height(20.dp))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {

@@ -422,6 +422,8 @@ fun EndpointResolversScreen(nav: NavHostController, id: String) {
     val ctx = LocalContext.current
     val loader = rememberLoader(id) { session.api.devices().firstOrNull { it.pk == id } ?: throw ApiException("Endpoint not found") }
     var help by remember { mutableStateOf(false) }
+    var choices by remember { mutableStateOf(false) }
+    fun openGuide(icon: String) = ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(setupGuideUrl(icon))))
 
     GlassActionBar(listOf(
         GlassAction(
@@ -429,16 +431,10 @@ fun EndpointResolversScreen(nav: NavHostController, id: String) {
             enabled = loader.data?.resolvers?.dot != null,
             onClick = {
                 val icon = loader.data?.icon.orEmpty()
-                // Android endpoints get the Private DNS shortcut; everything else opens its platform's guide.
-                if (icon == "mobile-android") help = true
-                else ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(setupGuideUrl(icon))))
+                // Android and Apple endpoints get a choice (this phone's Private DNS, or an Apple setup file, or the
+                // guide); everything else goes straight to its platform's guide.
+                if (icon == "mobile-android" || isAppleProfileDevice(icon)) choices = true else openGuide(icon)
             },
-        ),
-        // From Karlo's ideas (issue #5): set up a family member's iPhone or Mac from here.
-        GlassAction(
-            "iPhone / Mac", icon = Solar.FileUpload,
-            enabled = loader.data?.resolvers?.doh != null,
-            onClick = { loader.data?.let { shareAppleProfile(ctx, it) } },
         ),
     ))
 
@@ -488,6 +484,34 @@ fun EndpointResolversScreen(nav: NavHostController, id: String) {
         }
     }
 
+    if (choices) loader.data?.let { d ->
+        CdDialog(
+            onDismissRequest = { choices = false },
+            title = { Text("Set up ${d.name}") },
+            text = {
+                Column {
+                    if (d.icon == "mobile-android") GroupRow(
+                        "Use on this phone", first = true, last = false, fill = Palette.CardHigh,
+                        subtitle = "Turn on Android's Private DNS with this endpoint",
+                        icon = { Icon(Solar.PhoneAndroid, null, tint = Palette.Teal) },
+                    ) { choices = false; help = true }
+                    // From Karlo's ideas (issue #5): set up a family member's iPhone or Mac from this phone.
+                    else GroupRow(
+                        "Send a setup file", first = true, last = false, fill = Palette.CardHigh,
+                        subtitle = "Open it on the iPhone, iPad or Mac to install Control D",
+                        icon = { Icon(Solar.FileUpload, null, tint = Palette.Teal) },
+                    ) { choices = false; shareAppleProfile(ctx, d) }
+                    GroupRow(
+                        "Setup guide", first = false, last = true, fill = Palette.CardHigh,
+                        subtitle = "Control D's step-by-step instructions",
+                        icon = { Icon(Solar.MenuBook, null, tint = Palette.Teal) },
+                        trailing = { Icon(Solar.OpenInNew, null, tint = Palette.Muted) },
+                    ) { choices = false; openGuide(d.icon) }
+                }
+            },
+            confirmButton = { TextButton(onClick = { choices = false }) { Text("Close") } },
+        )
+    }
     if (help) {
         val dot = loader.data?.resolvers?.dot.orEmpty()
         CdDialog(

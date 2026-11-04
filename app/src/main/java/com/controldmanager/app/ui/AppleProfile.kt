@@ -66,6 +66,9 @@ internal fun appleDnsProfile(endpointName: String, doh: String, resolverId: Stri
     """.trimIndent() + "\n"
 }
 
+/** Endpoint types an Apple setup profile is for: iPhone, iPad and Mac. */
+internal fun isAppleProfileDevice(icon: String) = icon == "mobile-ios" || icon == "desktop-mac" || icon == "tablet-ios"
+
 /** Writes the endpoint's profile to the app's cache and opens the share sheet (send it to the iPhone or Mac). */
 internal fun shareAppleProfile(ctx: Context, d: Device) {
     val doh = d.resolvers?.doh ?: return

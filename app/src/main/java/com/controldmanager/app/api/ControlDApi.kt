@@ -526,6 +526,26 @@ class ControlDApi(private val token: String, private val orgId: String?) {
         call("PUT", "/profiles/$profileId/filters/filter/$filter", listOf("status" to if (enabled) "1" else "0"))
     }
 
+    /**
+     * A native filter on or off as the dashboard does it, in one request: on blocks ("do" 0) and [level] picks the
+     * mode at the same time (Relaxed, Balanced…, which replaces the active one); off is status 0 with "do" 1.
+     */
+    suspend fun setFilterAction(profileId: String, filter: String, on: Boolean, level: String? = null) {
+        call("PUT", "/profiles/$profileId/filters/filter/$filter", buildList {
+            add("status" to if (on) "1" else "0")
+            add("do" to if (on) "0" else "1")
+            if (on) level?.let { add("lvl" to it) }
+        })
+    }
+
+    /** One part of a stacked filter (Malware's levels): a filter or an IP filter, switched by itself. */
+    suspend fun setFilterPart(profileId: String, type: String, name: String, on: Boolean) {
+        call("PUT", "/profiles/$profileId/filters/$type/$name", listOf("status" to if (on) "1" else "0"))
+    }
+
+    /** Control D's locations and whether each is up (public; the dashboard's Network page). From Karlo's ideas (#5). */
+    suspend fun network(): NetworkStatus = parseNetwork(call("GET", "/network"))
+
     // ---------- Services ----------
 
     suspend fun profileServices(profileId: String): List<Service> =

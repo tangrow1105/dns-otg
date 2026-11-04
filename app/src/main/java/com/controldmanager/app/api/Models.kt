@@ -81,7 +81,8 @@ data class Profile(
     val isPaused get() = disabledUntil > System.currentTimeMillis() / 1000
 }
 
-data class FilterLevel(val title: String, val name: String, val status: Int)
+/** A filter's mode; [type] says which API switches it (filter, ipfilter or option), [optValue] an option's value. */
+data class FilterLevel(val title: String, val name: String, val status: Int, val type: String = "filter", val optValue: String? = null)
 
 data class Filter(
     val pk: String,
@@ -91,7 +92,8 @@ data class Filter(
     val levels: List<FilterLevel>,
 ) {
     val enabled get() = status == 1 || levels.any { it.status == 1 }
-    val activeLevel get() = levels.firstOrNull { it.status == 1 }
+    /** The level in use: for Malware, whose levels stack, the highest one that's on. */
+    val activeLevel get() = levels.lastOrNull { it.status == 1 }
 }
 
 data class ServiceCategory(val pk: String, val name: String, val description: String, val count: Int)
@@ -263,7 +265,10 @@ fun parseFilter(o: JSONObject) = Filter(
     description = o.optString("description"),
     status = o.optInt("status"),
     levels = o.optJSONArray("levels").objects().map {
-        FilterLevel(it.optString("title", it.optString("name")), it.optString("name"), it.optInt("status"))
+        FilterLevel(
+            it.optString("title", it.optString("name")), it.optString("name"), it.optInt("status"),
+            it.optString("type", "filter"), it.optJSONArray("opt").objects().firstOrNull()?.optStringOrNull("value"),
+        )
     },
 )
 
@@ -406,6 +411,28 @@ data class StatScope(
 
 /** One of Dragonfly's category groups (Tech, Tools & Network…); each category belongs to one group at most. */
 data class CategoryGroup(val id: String, val name: String, val categoryIds: List<String>)
+
+// ---------- Control D's network (public status of its locations) ----------
+
+/** A service's state at a location: 1 online, 0 offline (an outage), -1 not offered there. */
+data class PopLocation(val code: String, val city: String, val country: String, val api: Int, val dns: Int, val proxy: Int) {
+    /** Every service this location offers is up ("not offered" isn't an outage). */
+    val healthy get() = api != 0 && dns != 0 && proxy != 0
+}
+
+data class NetworkStatus(val locations: List<PopLocation>, val currentPop: String?, val time: Long) {
+    val outages get() = locations.filterNot { it.healthy }
+}
+
+fun parseNetwork(body: JSONObject): NetworkStatus {
+    val list = body.optJSONArray("network").objects().map {
+        val s = it.optJSONObject("status")
+        // A missing status counts as "not offered", as Control D's own page shows it (N/A).
+        fun st(k: String) = s?.optInt(k, -1) ?: -1
+        PopLocation(it.optString("iata_code"), it.optString("city_name"), it.optString("country_name"), st("api"), st("dns"), st("pxy"))
+    }.filter { it.code.isNotBlank() }
+    return NetworkStatus(list, body.optStringOrNull("current_pop"), body.optLong("time"))
+}
 
 /** Dragonfly's taxonomy behind Statistics' Traffic Categories: the groups, and every category's name by id. */
 data class TrafficTaxonomy(val groups: List<CategoryGroup>, val names: Map<String, String>, val dangerous: Set<String> = emptySet()) {
