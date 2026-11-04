@@ -118,14 +118,17 @@ data class ProfileOption(
     val defaultValue: Any?,
     val infoUrl: String?,
 ) {
-    /** For dropdown-like options the API sends the choices as an object of value -> label. */
+    /**
+     * For dropdown-like options the API sends the choices as an object of value -> label, or as a plain list of labels
+     * whose values are their positions (EDNS Client Subnet: "No ECS", "Auto", "Custom" are 0, 1, 2).
+     */
     val choices: List<Pair<String, String>>
         get() = when (val d = defaultValue) {
             is JSONObject -> d.keys().asSequence().map { it to d.optString(it, it) }.toList()
             is JSONArray -> (0 until d.length()).map { d.opt(it) }.map {
                 if (it is JSONObject) (it.optString("value", it.optString("PK")) to it.optString("title", it.optString("name", it.optString("value"))))
-                else it.toString() to it.toString()
-            }
+                else null
+            }.let { objects -> if (objects.all { it != null }) objects.filterNotNull() else (0 until d.length()).map { i -> "$i" to d.opt(i).toString() } }
             else -> emptyList()
         }
 }

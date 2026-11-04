@@ -488,10 +488,17 @@ class ControlDApi(private val token: String, private val orgId: String?) {
             )
         }
 
-    suspend fun setOption(profileId: String, option: String, enabled: Boolean, value: String? = null) {
+    /**
+     * Turns a profile option on or off, as the dashboard does: a switch sends only status, a choice or number its
+     * value, and the Custom choices (Block Response, EDNS Client Subnet) their IPs as custom_value ("v4|v6").
+     */
+    suspend fun setOption(profileId: String, option: String, enabled: Boolean, value: String? = null, customValue: String? = null) {
         call("PUT", "/profiles/$profileId/options/$option", buildList {
             add("status" to if (enabled) "1" else "0")
-            value?.let { add("value" to it) }
+            if (enabled) {
+                value?.let { add("value" to it) }
+                customValue?.let { add("custom_value" to it) }
+            }
         })
     }
 

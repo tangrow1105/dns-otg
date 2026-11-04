@@ -337,6 +337,12 @@ private val dashboardOptionOrder = listOf(
     "b_resp", "ecs_subnet", "spoof_ipv6", "dns64", "cflat", "safesearch", "safeyoutube",
 )
 
+/** Shown with the options, but switched through Control D's restrictions API (as the dashboard does). */
+private val restrictionOptions = setOf("safesearch", "safeyoutube")
+
+/** Choices that need IPs before they can be saved: Block Response "Custom" and EDNS Client Subnet "Custom". */
+private fun needsCustomIps(pk: String, value: String) = (pk == "b_resp" && value == "7") || (pk == "ecs_subnet" && value == "2")
+
 private val disableDurations = listOf(
     "5 minutes" to 5 * 60L,
     "15 minutes" to 15 * 60L,
@@ -423,6 +429,7 @@ private fun ProfileOptionsTab(pid: String, profile: Profile?, onChanged: () -> U
     var defaultRule by remember(loader.data) { mutableStateOf(loader.data?.defaultRule) }
     var editing by remember { mutableStateOf<ProfileOption?>(null) }
     var choosing by remember { mutableStateOf<ProfileOption?>(null) }
+    var customIps by remember { mutableStateOf<ProfileOption?>(null) }
     var pickRedirect by remember { mutableStateOf(false) }
     var autoStarted by remember { mutableStateOf(false) }
     var pickDuration by remember { mutableStateOf(false) }
@@ -511,15 +518,18 @@ private fun ProfileOptionsTab(pid: String, profile: Profile?, onChanged: () -> U
             }
 
             item { SectionHeader("Options") }
-            // Same order as the dashboard; a restriction that duplicates an option (e.g. Safe Search) is shown once, as the option.
-            val shownOptions = data.options
+            // Same order as the dashboard. Safe Search and Restricted YouTube are in the options catalog too, but they are
+            // restrictions: shown last, with the catalog's title and description, and switched through their own API.
+            val shownOptions = data.options.filterNot { it.pk in restrictionOptions }
                 .sortedBy { o -> dashboardOptionOrder.indexOf(o.pk).let { if (it < 0) Int.MAX_VALUE else it } }
-            val optionKeys = data.options.flatMap { listOf(it.pk.lowercase(), it.title.lowercase()) }.toSet()
-            val shownRestrictions = data.restrictions.filterNot { it.pk.lowercase() in optionKeys || it.name.lowercase() in optionKeys }
+            val shownRestrictions = data.restrictions.map { r ->
+                data.options.firstOrNull { it.pk == r.pk }?.let { r.copy(name = it.title, description = it.description.ifBlank { r.description }) } ?: r
+            }
             items(shownOptions, key = { "o_" + it.pk }) { o ->
                 val firstRow = o == shownOptions.firstOrNull()
                 val value = values[o.pk]
-                val on = value != null && value != "0"
+                // Control D lists only the options that are on, so a value of 0 (0.0.0.0, No ECS) is on too.
+                val on = value != null
                 val hasChoices = o.choices.isNotEmpty()
                 OptionCard(
                     o.pk, optionIcon(o.pk), o.title, o.description, o.infoUrl,
@@ -539,7 +549,7 @@ private fun ProfileOptionsTab(pid: String, profile: Profile?, onChanged: () -> U
                                     }
                                 }
                                 o.type == "toggle" -> runner.run(onDone = onChanged) {
-                                    session.api.setOption(pid, o.pk, true, "1")
+                                    session.api.setOption(pid, o.pk, true)
                                     values = values + (o.pk to "1")
                                 }
                                 else -> editing = o
@@ -563,7 +573,7 @@ private fun ProfileOptionsTab(pid: String, profile: Profile?, onChanged: () -> U
             }
             items(shownRestrictions, key = { "r_" + it.pk }) { r ->
                 val on = r.pk in restrictionsOn
-                OptionCard(r.pk, Solar.ShieldCheck, r.name, r.description, null, first = shownOptions.isEmpty() && r == shownRestrictions.firstOrNull(), last = false, control = {
+                OptionCard(r.pk, optionIcon(r.pk), r.name, r.description, null, first = shownOptions.isEmpty() && r == shownRestrictions.firstOrNull(), last = false, control = {
                     CdSwitch(on, { checked ->
                         runner.run {
                             session.api.setRestriction(pid, r.pk, checked)
@@ -635,9 +645,21 @@ private fun ProfileOptionsTab(pid: String, profile: Profile?, onChanged: () -> U
             o.title, o.choices, label = { it.second }, selected = { it.first == values[o.pk] },
             onDismiss = { choosing = null },
         ) { (v, _) ->
-            runner.run(onDone = onChanged) {
+            // Custom asks for its IPs first; everything else saves straight away (Branded uses Control D's default page).
+            if (needsCustomIps(o.pk, v)) customIps = o
+            else runner.run(if (o.pk == "b_resp" && v == "9") "Branded block page on: customise it on the dashboard" else null, onDone = onChanged) {
                 session.api.setOption(pid, o.pk, true, v)
                 values = values + (o.pk to v)
+            }
+        }
+    }
+    customIps?.let { o ->
+        val ecs = o.pk == "ecs_subnet"
+        val value = if (ecs) "2" else "7"
+        CustomIpsDialog(o.title, ecs, onDismiss = { customIps = null }) { custom ->
+            runner.run(onDone = onChanged) {
+                session.api.setOption(pid, o.pk, true, value, custom)
+                values = values + (o.pk to value)
             }
         }
     }
@@ -682,6 +704,57 @@ private fun UnlockDialog(onDismiss: () -> Unit, onUnlock: (String) -> Unit) {
     )
 }
 
+private val ipv4 = Regex("^(25[0-5]|2[0-4]\\d|1?\\d?\\d)(\\.(25[0-5]|2[0-4]\\d|1?\\d?\\d)){3}$")
+
+/** An IPv6 address written out (no lookup happens: only text made of hex digits, colons and dots is tried). */
+private fun isIpv6(s: String) = s.contains(':') && s.all { it.isLetterOrDigit() || it == ':' || it == '.' } &&
+    runCatching { java.net.InetAddress.getByName(s) is java.net.Inet6Address }.getOrDefault(false)
+
+/** "ip" or, for a subnet, "ip/prefix" with exactly [prefix]; blank is allowed (that side is left empty). */
+private fun validSide(s: String, v6: Boolean, prefix: Int?): Boolean {
+    if (s.isBlank()) return true
+    val ip = if (prefix == null) s else s.substringBefore('/').takeIf { s.substringAfter('/', "") == "$prefix" } ?: return false
+    return if (v6) isIpv6(ip) else ipv4.matches(ip)
+}
+
+/**
+ * The IPs a "Custom" choice needs, as the dashboard asks for them: Block Response answers with these addresses,
+ * EDNS Client Subnet sends this /24 and /56. One of the two is enough; Control D gets them as "v4|v6".
+ */
+@Composable
+private fun CustomIpsDialog(title: String, subnet: Boolean, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var v4 by remember { mutableStateOf("") }
+    var v6 by remember { mutableStateOf("") }
+    val ok4 = validSide(v4.trim(), false, if (subnet) 24 else null)
+    val ok6 = validSide(v6.trim(), true, if (subnet) 56 else null)
+    val valid = (v4.isNotBlank() || v6.isNotBlank()) && ok4 && ok6
+    CdDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("$title: Custom") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    if (subnet) "The subnet sent with your queries: an IPv4 /24, an IPv6 /56, or both."
+                    else "The addresses blocked queries answer with: IPv4, IPv6, or both.",
+                    style = MaterialTheme.typography.bodySmall, color = Palette.Muted,
+                )
+                CdTextField(
+                    v4, { v4 = it }, singleLine = true, label = { Text(if (subnet) "IPv4 subnet" else "IPv4") },
+                    placeholder = { Text(if (subnet) "203.0.113.0/24" else "10.0.0.1") }, isError = !ok4,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                CdTextField(
+                    v6, { v6 = it }, singleLine = true, label = { Text(if (subnet) "IPv6 subnet" else "IPv6") },
+                    placeholder = { Text(if (subnet) "2001:db8:abcd:1200::/56" else "fd00::1") }, isError = !ok6,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = { TextButton(enabled = valid, onClick = { onSave("${v4.trim()}|${v6.trim()}"); onDismiss() }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
 @Composable
 private fun NumberOrTextDialog(o: ProfileOption, initial: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var v by remember { mutableStateOf(initial) }
@@ -700,7 +773,8 @@ private fun NumberOrTextDialog(o: ProfileOption, initial: String, onDismiss: () 
                 )
             }
         },
-        confirmButton = { TextButton(enabled = v.isNotBlank(), onClick = { onSave(v.trim()); onDismiss() }) { Text("Save") } },
+        // TTLs are whole seconds, as the dashboard allows.
+        confirmButton = { TextButton(enabled = v.isNotBlank() && (!numeric || v.trim().all { it.isDigit() }), onClick = { onSave(v.trim()); onDismiss() }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
