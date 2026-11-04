@@ -63,6 +63,9 @@ internal fun YouTubeProxyCard(pid: String) {
     val (current, proxies) = state.data ?: (null to emptyList())
     val on = current != null
 
+    // Albania by default (where YouTube appears to show few ads), when this account has a location there.
+    val albania = proxies.firstOrNull { it.country.equals("AL", true) || it.countryName.contains("Albania", true) }
+
     fun apply(p: Proxy?) = runner.run(if (p == null) "YouTube back to normal" else "YouTube now goes through ${p.label}") {
         setYouTubeProxy(session.api, pid, p)
         state.data = p to proxies
@@ -89,7 +92,8 @@ internal fun YouTubeProxyCard(pid: String) {
                 CdSwitch(on, { want ->
                     if (!want) apply(null)
                     else if (proxies.isEmpty()) runner.run { throw IllegalStateException("No proxy locations are available on this account") }
-                    // Turning on asks where first.
+                    // Straight to Albania; without a location there, the list to pick another.
+                    else if (albania != null) apply(albania)
                     else picking = true
                 }, busy = runner.busy, enabled = state.data != null)
             }
