@@ -45,7 +45,7 @@ internal suspend fun setYouTubeProxy(api: ControlDApi, pid: String, proxy: Proxy
 }
 
 /**
- * The 3rd-party tab's YouTube shortcut: Control D's own Redirect, through one of its proxy locations, for YouTube's
+ * The 3rd-party tab's YouTube shortcut: Control D's own Redirect, through its Albania location, for YouTube's
  * names (the idea behind NextDNS's YouTube option, on Control D's servers). Kept in its own Custom Rules folder, so
  * the profile's YouTube service setting is left as it was, and turning it off removes exactly what it added.
  */
@@ -59,11 +59,10 @@ internal fun YouTubeProxyCard(pid: String) {
         val proxies = session.proxies()
         Pair(folder?.action?.via?.let { via -> proxies.firstOrNull { it.pk == via } } ?: folder?.let { proxies.firstOrNull() }, proxies)
     }
-    var picking by remember { mutableStateOf(false) }
     val (current, proxies) = state.data ?: (null to emptyList())
     val on = current != null
 
-    // Albania by default (where YouTube appears to show few ads), when this account has a location there.
+    // Only Albania for now (where YouTube appears to show few ads).
     val albania = proxies.firstOrNull { it.country.equals("AL", true) || it.countryName.contains("Albania", true) }
 
     fun apply(p: Proxy?) = runner.run(if (p == null) "YouTube back to normal" else "YouTube now goes through ${p.label}") {
@@ -84,28 +83,17 @@ internal fun YouTubeProxyCard(pid: String) {
                         )
                     }
                     Text(
-                        "Enjoy YouTube with fewer ads, with a little help from Control D's proxy locations. YouTube sees you in the " +
-                            "country you pick, where it may show fewer ads; recommendations and language can change to that country.",
+                        "Enjoy YouTube with fewer ads, with a little help from Control D's Albania location. YouTube sees you in " +
+                            "Albania, where it shows fewer ads; recommendations and language can change to Albania's.",
                         style = MaterialTheme.typography.bodySmall, color = Palette.Muted,
                     )
                 }
                 CdSwitch(on, { want ->
                     if (!want) apply(null)
-                    else if (proxies.isEmpty()) runner.run { throw IllegalStateException("No proxy locations are available on this account") }
-                    // Straight to Albania; without a location there, the list to pick another.
                     else if (albania != null) apply(albania)
-                    else picking = true
+                    else runner.run { throw IllegalStateException("Control D's Albania location isn't available on this account") }
                 }, busy = runner.busy, enabled = state.data != null)
-            }
-            if (on) {
-                Spacer(Modifier.height(8.dp))
-                SelectBox("Through ${current!!.label}", enabled = !runner.busy) { picking = true }
             }
         }
     }
-
-    if (picking) PickerDialog(
-        "Watch YouTube through", proxies, label = { it.label }, selected = { it.pk == current?.pk },
-        onDismiss = { picking = false },
-    ) { apply(it) }
 }
