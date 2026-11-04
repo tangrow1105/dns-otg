@@ -186,11 +186,20 @@ private fun NativeFilters(pid: String) {
     val runner = rememberRunner()
     val loader = rememberLoader(pid) { session.api.nativeFilters(pid) }
     var open by remember { mutableStateOf<Filter?>(null) }
+    // A mode being saved: its filter's switches spin, and the selector shows the new mode straight away.
+    var pendingLevel by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-    fun update(f: Filter, enable: Boolean, level: FilterLevel? = null) = runner.run {
-        val updated = applyFilter(session.api, pid, f, enable, level)
-        loader.data = loader.data?.map { if (it.pk == f.pk) updated else it }
-        if (open?.pk == f.pk) open = updated
+    fun update(f: Filter, enable: Boolean, level: FilterLevel? = null) {
+        if (level != null) pendingLevel = f.pk to level.name
+        runner.run {
+            try {
+                val updated = applyFilter(session.api, pid, f, enable, level)
+                loader.data = loader.data?.map { if (it.pk == f.pk) updated else it }
+                if (open?.pk == f.pk) open = updated
+            } finally {
+                pendingLevel = null
+            }
+        }
     }
 
     LoaderBox(loader) { filters ->
@@ -206,7 +215,7 @@ private fun NativeFilters(pid: String) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(filterIcon(f.pk, f.name), null, Modifier.size(26.dp), tint = if (f.enabled) Palette.Text else Palette.Muted)
                             Spacer(Modifier.weight(1f))
-                            CdSwitch(f.enabled, { update(f, it) }, busy = runner.busy)
+                            CdSwitch(f.enabled, { update(f, it) }, busy = runner.busy, spinning = pendingLevel?.first == f.pk)
                         }
                         Spacer(Modifier.height(6.dp))
                         Text(f.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -228,7 +237,7 @@ private fun NativeFilters(pid: String) {
                     Icon(filterIcon(f.pk, f.name), null, Modifier.size(28.dp), tint = Palette.Text)
                     Spacer(Modifier.width(10.dp))
                     Text(f.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                    CdSwitch(f.enabled, { update(f, it) }, busy = runner.busy)
+                    CdSwitch(f.enabled, { update(f, it) }, busy = runner.busy, spinning = pendingLevel?.first == f.pk)
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(html(f.description), color = Palette.Muted, style = MaterialTheme.typography.bodyMedium)
@@ -236,7 +245,9 @@ private fun NativeFilters(pid: String) {
                     SectionHeader("Mode")
                     SlideSelector(
                         f.levels.map { SlideOption(it.title) },
-                        if (f.enabled) f.levels.indexOfFirst { it.status == 1 } else -1,
+                        // The mode being saved, else the one in use (for Malware, whose levels stack, the highest one on).
+                        pendingLevel?.takeIf { it.first == f.pk }?.let { p -> f.levels.indexOfFirst { it.name == p.second } }
+                            ?: if (f.enabled) f.levels.indexOf(f.activeLevel) else -1,
                         { i -> update(f, true, f.levels[i]) },
                         enabled = !runner.busy,
                     )

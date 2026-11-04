@@ -792,6 +792,8 @@ fun CdSwitch(
     enabled: Boolean = true,
     /** True while the screen's request is running; the toggled switch shows a spinner until it ends. */
     busy: Boolean = false,
+    /** Spins without being toggled: a change made elsewhere for the same thing (a filter's mode) is saving. */
+    spinning: Boolean = false,
 ) {
     // Flip immediately to the requested state and spin until the change lands (or the request ends/fails).
     var target by remember { mutableStateOf<Boolean?>(null) }
@@ -805,7 +807,7 @@ fun CdSwitch(
             if (!currentBusy) target = null
         }
     }
-    val loading = target != null
+    val loading = target != null || spinning
     val on = target ?: checked
     val interactive = enabled && !loading && onCheckedChange != null
 
