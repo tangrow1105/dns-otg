@@ -269,6 +269,7 @@ private fun ExternalFilters(pid: String) {
     LoaderBox(loader) { filters ->
         val list = filters.filter { q.isBlank() || it.name.contains(q, true) }.sortedByDescending { it.enabled }
         LazyColumn(contentPadding = PaddingValues(16.dp, 0.dp, 16.dp, SearchPillSpace), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (q.isBlank()) item(key = "youtube-proxy") { YouTubeProxyCard(pid) }
             if (list.isEmpty()) item { EmptyState(Solar.Filter, "No filters found") }
             items(list, key = { it.pk }) { f ->
                 CdCard(Modifier.fillMaxWidth()) {
@@ -429,7 +430,7 @@ private fun OptionCard(
 }
 
 @Composable
-private fun SelectBox(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun SelectBox(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     CdFieldCard(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(label, modifier = Modifier.weight(1f))
