@@ -21,6 +21,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Share a link from any app to create a rule for its domain (shown over that app). -->
+        <activity
+            android:name=".ShareRuleActivity"
+            android:exported="true"
+            android:label="@string/share_label"
+            android:theme="@style/Theme.CDManager.Share"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <!-- Shares the Apple setup profile with other apps (read-only, one file in the cache). -->
         <provider
             android:name="androidx.core.content.FileProvider"

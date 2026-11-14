@@ -316,8 +316,11 @@ fun <T> rememberLoader(vararg keys: Any?, block: suspend () -> T): Loader<T> {
     return loader
 }
 
-/** Runs mutations with a busy flag and reports errors/success in the snackbar. */
-class Runner(private val scope: CoroutineScope, private val snack: SnackbarHostState) {
+/** Runs mutations with a busy flag and reports errors/success with [report] (the snackbar, for screens). */
+class Runner(private val scope: CoroutineScope, private val report: (String) -> Unit) {
+    // On the app's scope: a screen that closes itself in onDone would otherwise take the message with it.
+    constructor(scope: CoroutineScope, snack: SnackbarHostState) : this(scope, { m -> AppToast.scope.launch { snack.showSnackbar(m) } })
+
     var busy by mutableStateOf(false)
 
     fun run(success: String? = null, onDone: () -> Unit = {}, block: suspend () -> Unit) {
@@ -325,13 +328,12 @@ class Runner(private val scope: CoroutineScope, private val snack: SnackbarHostS
             busy = true
             try {
                 block()
-                // On the app's scope: a screen that closes itself in onDone would otherwise take the message with it.
-                success?.let { AppToast.scope.launch { snack.showSnackbar(it) } }
+                success?.let(report)
                 onDone()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                AppToast.scope.launch { snack.showSnackbar(e.message ?: "Something went wrong") }
+                report(e.message ?: "Something went wrong")
             } finally {
                 busy = false
             }
