@@ -487,6 +487,7 @@ private fun AccountScreen(nav: NavHostController, onLogout: () -> Unit) {
                 when (ThemePref.mode) { "light" -> 1; "dark" -> 2; else -> 0 },
                 { ThemePref.set(ctx, listOf("system", "light", "dark")[it]) },
             )
+            AppearanceOptions()
 
             // One tap asks the launcher to place a widget; launchers that can't get the long-press way instead.
             SectionHeader("Widgets (beta)")

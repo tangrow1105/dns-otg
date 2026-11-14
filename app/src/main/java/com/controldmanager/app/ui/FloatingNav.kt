@@ -272,7 +272,7 @@ fun CdMenu(
     DisposableEffect(Unit) { onDispose { if (host.menu?.key === key) host.menu = null } }
 }
 
-private val MenuShape = CdShape
+private val MenuShape get() = CdShape
 
 /** Draws the open [CdMenu] (if any) above everything, with a tap-to-dismiss layer and a short zoom-in. */
 @Composable
@@ -927,7 +927,8 @@ fun CdDialog(
     DisposableEffect(Unit) { onDispose { host.dialogs.removeAll { it.key === key } } }
 }
 
-private val DialogShape = RoundedCornerShape(32.dp)
+// Dialogs sit 12 dp rounder than cards (32 dp at the default 20 dp).
+private val DialogShape get() = RoundedCornerShape(CdCorner + 12.dp)
 
 @Composable
 fun DialogOverlay(host: DialogHostState, haze: HazeState) {
@@ -1027,7 +1028,7 @@ private fun DialogPanel(d: HostedDialog, haze: HazeState, live: Boolean, isTop: 
 // ---------- One UI pill button ----------
 
 /** Fill of every regular button: a dark pill (white in light mode). */
-val ButtonFill get() = Palette.mix(Color(0xFF1C2131), Color.White)
+val ButtonFill get() = Palette.mix(Appearance.surface.button, Color.White)
 
 /**
  * The app's button: a dark rounded pill with an optional icon and a bold label, centred. [tint] colours the
