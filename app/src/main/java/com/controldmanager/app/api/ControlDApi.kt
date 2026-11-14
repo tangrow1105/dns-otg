@@ -255,6 +255,36 @@ class ControlDApi(private val token: String, private val orgId: String?) {
         }
     }
 
+    // ---------- Filter Preview (POST {region}.analytics.controld.com/v2/simulation, as the dashboard's Preview) ----------
+
+    /**
+     * Queries on [profileId] in [r] that blocking [enable] (filter or filter mode ids, e.g. "social", "ads_small")
+     * would have blocked. With [enable] null: all of the profile's queries, to show a share of traffic.
+     */
+    suspend fun simulationCount(region: String, r: TimeRange, profileId: String, enable: List<String>?): Long =
+        simulation(region, "/count", simulationBody(r, profileId, enable)).optLong("count")
+
+    /** The domains behind [simulationCount], most queries first. */
+    suspend fun simulationDomains(region: String, r: TimeRange, profileId: String, enable: List<String>, limit: Int = 50): List<CountItem> =
+        simulation(region, "/count/question", simulationBody(r, profileId, enable).put("limit", limit).put("sortOrder", "desc"))
+            .optJSONArray("counts").objects().map { CountItem(it.optString("value"), it.optLong("count")) }
+
+    private fun simulationBody(r: TimeRange, profileId: String, enable: List<String>?) = JSONObject().apply {
+        put("view", if (enable == null) "actual" else "impact")
+        put("startTime", r.startIso)
+        put("endTime", r.endIso)
+        put("filters", if (enable == null) JSONObject() else JSONObject().put("enable", org.json.JSONArray(enable)))
+        if (enable != null) put("actions", org.json.JSONArray(listOf(0)))
+        put("profileIds", org.json.JSONArray(listOf(profileId)))
+    }
+
+    private suspend fun simulation(region: String, path: String, body: JSONObject): JSONObject = try {
+        request("POST", "https://$region.analytics.controld.com/v2/simulation$path", json = body)
+    } catch (e: ApiException) {
+        if (e.code == 401 || e.code == 403) throw ApiException("Analytics rejected this API token (${e.code}): ${e.message}", e.code)
+        throw e
+    }
+
     private fun range(r: TimeRange, endpointId: String?) = buildList {
         add("startTime" to r.startIso)
         add("endTime" to r.endIso)

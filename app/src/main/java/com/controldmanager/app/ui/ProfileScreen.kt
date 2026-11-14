@@ -257,6 +257,8 @@ private fun NativeFilters(pid: String) {
                         enabled = !runner.busy,
                     )
                 }
+                SectionHeader("Preview")
+                FilterPreview(pid, f, busy = runner.busy) { level -> update(f, true, level) }
             }
         }
     }
