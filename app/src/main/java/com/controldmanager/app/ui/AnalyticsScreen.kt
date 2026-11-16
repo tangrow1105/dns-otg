@@ -492,14 +492,14 @@ private fun StatisticsView(region: String, range: TimeRange, onRefresh: () -> Un
                 }
             }
             item {
-                TabbedCard(geoTabs, geoTab, { geoTab = it }, Palette.Blue) {
+                TabbedCard(geoTabs, geoTab, { geoTab = it }, Palette.Teal) {
                     val d = geoData.data
                     when {
                         d == null && geoData.loading -> LinearProgressIndicator(Modifier.fillMaxWidth())
                         d == null -> Text(geoData.error ?: "", color = Palette.Red)
                         geoTab < 2 -> {
                             val list = d[0]
-                            RankSection(if (geoTab == 0) "Sources" else "Destinations", list, Palette.Blue) {
+                            RankSection(if (geoTab == 0) "Sources" else "Destinations", list, Palette.Teal) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     FlagIcon(it.value, 20)
                                     Spacer(Modifier.width(8.dp))
@@ -512,8 +512,8 @@ private fun StatisticsView(region: String, range: TimeRange, onRefresh: () -> Un
                             )
                         }
                         else -> {
-                            RankSection("Networks", d[0], Palette.Blue) { DomainLabel(it.value.ifBlank { "Unknown" }) }
-                            RankSection("ASNs", d.getOrElse(1) { emptyList() }, Palette.Blue) { DomainLabel("AS${it.value}") }
+                            RankSection("Networks", d[0], Palette.Teal) { DomainLabel(it.value.ifBlank { "Unknown" }) }
+                            RankSection("ASNs", d.getOrElse(1) { emptyList() }, Palette.Teal) { DomainLabel("AS${it.value}") }
                         }
                     }
                 }
@@ -575,7 +575,7 @@ private fun SecurityRow(
             Spacer(Modifier.width(8.dp))
             Box {
                 Row(
-                    Modifier.clip(RoundedCornerShape(6.dp)).then(if (menu != null) Modifier.clickable { open = true } else Modifier),
+                    Modifier.clip(RoundedCornerShape(CdCorner * 0.3f)).then(if (menu != null) Modifier.clickable { open = true } else Modifier),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(label, fontWeight = FontWeight.SemiBold)
@@ -590,8 +590,8 @@ private fun SecurityRow(
             Text(share?.let { "%.1f%%".format(it).replace(".0%", "%") } ?: "-", color = color, fontWeight = FontWeight.SemiBold)
         }
         Spacer(Modifier.height(6.dp))
-        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.22f))) {
-            Box(Modifier.fillMaxHeight().fillMaxWidth(((share ?: 0.0) / 100).toFloat()).clip(RoundedCornerShape(50)).background(color))
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(CdCorner * 0.1f)).background(color.copy(alpha = 0.22f))) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(((share ?: 0.0) / 100).toFloat()).clip(RoundedCornerShape(CdCorner * 0.1f)).background(color))
         }
     }
     if (showInfo) CdDialog(
@@ -614,7 +614,7 @@ private fun TabbedCard(tabs: List<String>, selected: Int, onSelect: (Int) -> Uni
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.labelLarge,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(50))
+                            .clip(RoundedCornerShape(CdCorner))
                             .background(if (on) accent else Palette.Bg)
                             .clickable { onSelect(i) }
                             .padding(horizontal = 12.dp, vertical = 7.dp),
@@ -634,7 +634,7 @@ private fun RankSection(title: String, items: List<CountItem>, color: Color, emp
     val top = items.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1
     items.take(10).forEach { item ->
         Box(Modifier.fillMaxWidth().padding(vertical = 2.dp).height(34.dp)) {
-            Box(Modifier.fillMaxHeight().fillMaxWidth(item.count.toFloat() / top).clip(RoundedCornerShape(4.dp)).background(color.copy(alpha = 0.16f)))
+            Box(Modifier.fillMaxHeight().fillMaxWidth(item.count.toFloat() / top).clip(RoundedCornerShape(CdCorner * 0.2f)).background(color.copy(alpha = 0.16f)))
             Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) { label(item) }
                 Text(compact(item.count), style = MaterialTheme.typography.labelLarge)
@@ -875,7 +875,7 @@ private fun QueriesChart(points: List<SeriesPoint>, range: TimeRange, bars: Bool
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         chartSeries.forEach { d ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(width = 12.dp, height = 3.dp).clip(RoundedCornerShape(2.dp)).background(d.color))
+                Box(Modifier.size(width = 12.dp, height = 3.dp).clip(RoundedCornerShape(CdCorner * 0.1f)).background(d.color))
                 Spacer(Modifier.width(6.dp))
                 Text(d.label, style = MaterialTheme.typography.labelMedium, color = Palette.Muted)
             }
@@ -917,7 +917,7 @@ private fun RankCard(title: String, items: List<CountItem>, color: Color, label:
                 Box(Modifier.fillMaxWidth().padding(vertical = 2.dp).height(34.dp)) {
                     Box(
                         Modifier.fillMaxHeight().fillMaxWidth(item.count.toFloat() / top)
-                            .clip(RoundedCornerShape(4.dp)).background(color.copy(alpha = 0.16f)),
+                            .clip(RoundedCornerShape(CdCorner * 0.2f)).background(color.copy(alpha = 0.16f)),
                     )
                     Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) { label(item) }
@@ -1518,7 +1518,7 @@ private fun Favicon(domain: String, size: Int = 20) {
         if (state != 2) coil3.compose.AsyncImage(
             model = "https://favicon.controld.com/$host", contentDescription = null,
             onSuccess = { state = 1 }, onError = { state = 2 },
-            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp)),
+            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(CdCorner * 0.2f)),
         )
     }
 }
