@@ -367,7 +367,7 @@ private val SheetGlass get() = HazeStyle(
     blurRadius = 48.dp,
     noiseFactor = 0.06f,
 )
-private val SheetShape = RoundedCornerShape(32.dp)
+private val SheetShape = cdShape(32)
 
 /**
  * One UI style sheet: floats above the bottom edge with every corner rounded, frosted glass, a small handle,

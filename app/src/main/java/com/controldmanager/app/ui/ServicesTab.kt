@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -206,7 +205,7 @@ fun QuickActions(selected: Int?, active: Boolean, busy: Boolean, onPick: (Int) -
         Modifier
             .fillMaxWidth()
             .alpha(if (active || pending != null) 1f else 0.5f)
-            .clip(RoundedCornerShape(50))
+            .clip(CdPill)
             .background(Palette.Bg)
             .padding(3.dp),
     ) {
@@ -220,7 +219,7 @@ fun QuickActions(selected: Int?, active: Boolean, busy: Boolean, onPick: (Int) -
         val pill = animateCdColor(
             if (lit) litColor else Palette.CardHigh, androidx.compose.animation.core.tween(220), label = "actionPillColor",
         )
-        if (index >= 0) Box(Modifier.offset(x = x).width(w).height(34.dp).clip(RoundedCornerShape(50)).background(pill))
+        if (index >= 0) Box(Modifier.offset(x = x).width(w).height(34.dp).clip(CdPill).background(pill))
         Row(Modifier.fillMaxWidth()) {
             segments.forEach { (d, icon, label) ->
                 val chosen = shownSelected == d
@@ -240,7 +239,7 @@ fun QuickActions(selected: Int?, active: Boolean, busy: Boolean, onPick: (Int) -
                     Modifier
                         .width(w)
                         .height(34.dp)
-                        .clip(RoundedCornerShape(50))
+                        .clip(CdPill)
                         .clickable(enabled = tappable) {
                             if (!reopen) pending = d
                             onPick(d)

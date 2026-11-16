@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -32,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -43,6 +45,8 @@ class Accent(
     val key: String, val label: String, val dark: Color, val light: Color, val onDark: Color,
     val darkContainer: Color = lerp(Color(0xFF0B0C12), dark, 0.24f),
     val lightOnContainer: Color = lerp(light, Color.Black, 0.35f),
+    /** Ink on a light-theme fill: dark on bright accents (teal, lime, amber), white on deep ones. */
+    val onLight: Color = Palette.inkOn(light),
 )
 
 /** The app's backgrounds, cards, outlines and text, for the dark and the light theme. */
@@ -156,7 +160,7 @@ fun AppearanceOptions() {
                         .semantics { contentDescription = a.label; selected = chosen },
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (chosen) Icon(Solar.Check, null, Modifier.size(18.dp), tint = if (Palette.light) Color.White else a.onDark)
+                    if (chosen) Icon(Solar.Check, null, Modifier.size(18.dp), tint = if (Palette.light) a.onLight else a.onDark)
                 }
             }
         }
@@ -173,10 +177,39 @@ fun AppearanceOptions() {
             valueRange = 0f..Appearance.MAX_CORNER.toFloat(),
             steps = Appearance.MAX_CORNER / 2 - 1,
         )
+        Spacer(Modifier.height(6.dp))
+        AppearancePreview()
 
         if (!Appearance.isDefault) {
             TextButton(onClick = { Appearance.reset(ctx) }, modifier = Modifier.align(Alignment.End)) {
                 Text("Reset to default", color = Palette.Muted)
+            }
+        }
+    }
+}
+
+/** Tabs and ranking bars as on Analytics, so the accent and corners show without leaving Preferences. */
+@Composable
+private fun AppearancePreview() {
+    Column(
+        Modifier.fillMaxWidth().clip(CdShape).background(Palette.Bg).padding(12.dp)
+            .clearAndSetSemantics { contentDescription = "Preview of the accent colour and corner radius" },
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("Sources", "Destinations").forEachIndexed { i, t ->
+                val on = i == 0
+                Text(
+                    t, color = if (on) Palette.OnAccent else Palette.Muted, fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.clip(CdPill).background(if (on) Palette.Teal else Palette.Card).padding(horizontal = 12.dp, vertical = 7.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        listOf("United States" to 1f, "Germany" to 0.55f).forEach { (name, share) ->
+            Box(Modifier.fillMaxWidth().padding(vertical = 2.dp).height(34.dp)) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(share).clip(cdShape(4)).background(Palette.Teal.copy(alpha = 0.16f + 0.08f * Palette.t)))
+                Text(name, Modifier.align(Alignment.CenterStart).padding(horizontal = 8.dp), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

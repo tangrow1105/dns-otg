@@ -8,7 +8,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import com.controldmanager.app.api.Device
 import androidx.compose.foundation.verticalScroll
@@ -278,7 +277,7 @@ private fun ProfileCard(
                     Box {
                         Row(
                             Modifier
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(cdShape(6))
                                 .clickable(enabled = endpoints.isNotEmpty()) { showEndpoints = true }
                                 .padding(vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,

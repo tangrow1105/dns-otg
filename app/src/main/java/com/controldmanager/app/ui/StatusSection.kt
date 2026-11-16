@@ -113,7 +113,7 @@ fun StatusSection() {
     SectionHeader("DNS") {
         val c = if (using) Palette.Teal else Palette.Red
         Row(
-            Modifier.clip(RoundedCornerShape(50)).background(c.copy(alpha = 0.14f)).padding(horizontal = 10.dp, vertical = 4.dp),
+            Modifier.clip(CdPill).background(c.copy(alpha = 0.14f)).padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(if (using) "Using Control D" else "Not using Control D", color = c, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)

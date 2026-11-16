@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -105,7 +104,7 @@ fun DragonflySection(domain: String, atMs: Long) {
             Text("Couldn't reach Dragonfly", style = MaterialTheme.typography.bodySmall, color = Palette.Muted, modifier = Modifier.weight(1f))
             TextButton(onClick = { lookup.reload() }) { Text("Retry") }
         }
-        result == null -> Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(56.dp).clip(RoundedCornerShape(12.dp)).background(shimmerBrush()))
+        result == null -> Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(56.dp).clip(cdShape(12)).background(shimmerBrush()))
         result.intel == null -> Text(
             "Dragonfly has no report on this domain.",
             style = MaterialTheme.typography.bodySmall, color = Palette.Muted, modifier = Modifier.padding(vertical = 6.dp),
@@ -163,7 +162,7 @@ private fun SiteScreenshot(url: String) {
     coil3.compose.AsyncImage(
         model = request, contentDescription = "Screenshot of the site",
         contentScale = ContentScale.Crop, alignment = Alignment.TopCenter, onError = { failed = true },
-        modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp)).background(Palette.CardHigh),
+        modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth().aspectRatio(16f / 9f).clip(cdShape(12)).background(Palette.CardHigh),
     )
 }
 
@@ -183,8 +182,8 @@ private fun IntelCategoryRow(c: IntelCategory) {
             Spacer(Modifier.width(6.dp))
             Text("${(c.confidence * 100).roundToInt()}%", style = MaterialTheme.typography.labelMedium, color = Palette.Muted)
         }
-        Box(Modifier.padding(vertical = 5.dp).fillMaxWidth().height(4.dp).clip(RoundedCornerShape(50)).background(Palette.Outline)) {
-            Box(Modifier.fillMaxWidth(c.confidence.toFloat().coerceIn(0f, 1f)).fillMaxHeight().clip(RoundedCornerShape(50)).background(color))
+        Box(Modifier.padding(vertical = 5.dp).fillMaxWidth().height(4.dp).clip(CdPill).background(Palette.Outline)) {
+            Box(Modifier.fillMaxWidth(c.confidence.toFloat().coerceIn(0f, 1f)).fillMaxHeight().clip(CdPill).background(color))
         }
         if (c.reasoning.isNotBlank()) Text(c.reasoning, style = MaterialTheme.typography.bodySmall, color = Palette.Muted)
     }

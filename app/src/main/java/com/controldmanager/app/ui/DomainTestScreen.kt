@@ -5,7 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -106,8 +105,8 @@ fun DomainTestScreen(nav: NavHostController) {
             )
             // Endpoint picker (the test runs against that endpoint's profiles).
             Row(
-                Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(50)).background(FieldFill)
-                    .border(1.dp, Palette.Outline.copy(alpha = 0.6f), RoundedCornerShape(50))
+                Modifier.fillMaxWidth().height(52.dp).clip(CdPill).background(FieldFill)
+                    .border(1.dp, Palette.Outline.copy(alpha = 0.6f), CdPill)
                     .clickable(enabled = devices.data != null) { pickEndpoint = true }
                     .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,

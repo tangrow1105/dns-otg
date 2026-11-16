@@ -27,6 +27,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,8 +74,10 @@ object Palette {
     val Muted get() = mix(Appearance.surface.muted)
     /** Foreground "ink" for translucent overlays: white on dark, black on light. */
     val Ink get() = mix(Color.White, Color.Black)
+    /** Readable ink on a solid [fill]: near-black on bright colours, white on deep ones. */
+    fun inkOn(fill: Color): Color = if (fill.luminance() > 0.179f) Color(0xFF0E1018) else Color.White
     /** Text/icon colour on top of a [Teal] fill. */
-    val OnAccent get() = mix(Appearance.accent.onDark, Color.White)
+    val OnAccent get() = mix(Appearance.accent.onDark, Appearance.accent.onLight)
 }
 
 private fun colorScheme() = if (Palette.light) lightColorScheme(
@@ -83,7 +86,7 @@ private fun colorScheme() = if (Palette.light) lightColorScheme(
     primaryContainer = Palette.Teal.copy(alpha = 0.16f),
     onPrimaryContainer = Appearance.accent.lightOnContainer,
     secondary = Palette.Teal,
-    onSecondary = Color.White,
+    onSecondary = Palette.OnAccent,
     secondaryContainer = Palette.Teal.copy(alpha = 0.16f),
     onSecondaryContainer = Appearance.accent.lightOnContainer,
     tertiary = Palette.Orange,
@@ -134,6 +137,12 @@ private fun colorScheme() = if (Palette.light) lightColorScheme(
  */
 val CdCorner get() = Appearance.corner.dp
 val CdShape get() = RoundedCornerShape(CdCorner)
+
+/** A smaller radius, [atDefault] dp at the default setting, scaled with it (square when corners are 0). */
+fun cdShape(atDefault: Int) = RoundedCornerShape(CdCorner * (atDefault.toFloat() / Appearance.DEFAULT_CORNER))
+
+/** Chips, tabs and bars: fully round at the default setting and above, squarer below it. */
+val CdPill get() = RoundedCornerShape(percent = (Appearance.corner * 50 / Appearance.DEFAULT_CORNER).coerceAtMost(50))
 
 private fun shapes() = CdShape.let { Shapes(extraSmall = it, small = it, medium = it, large = it, extraLarge = it) }
 
@@ -447,7 +456,7 @@ fun Pill(text: String, color: Color, modifier: Modifier = Modifier) {
         fontSize = 11.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = modifier
-            .clip(RoundedCornerShape(50))
+            .clip(CdPill)
             .background(color.copy(alpha = 0.14f))
             .padding(horizontal = 8.dp, vertical = 2.dp),
     )
@@ -462,7 +471,7 @@ fun ActionPill(action: Action?, proxies: List<Proxy> = emptyList()) {
     if (action.doType == Do.REDIRECT && action.via != null) {
         val p = proxies.firstOrNull { it.pk == action.via }
         Row(
-            Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.14f))
+            Modifier.clip(CdPill).background(color.copy(alpha = 0.14f))
                 .padding(start = 3.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
