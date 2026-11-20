@@ -1,168 +1,164 @@
 package com.controldmanager.app.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.controldmanager.app.api.Action
-import com.controldmanager.app.api.CountItem
-import com.controldmanager.app.api.Do
+import com.controldmanager.app.api.ApiException
 import com.controldmanager.app.api.Filter
+import com.controldmanager.app.api.FilterChange
 import com.controldmanager.app.api.FilterLevel
 import com.controldmanager.app.api.TimeRange
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import java.text.NumberFormat
 
-/** The ranges the dashboard's preview offers. */
-private val previewRanges = listOf(SlideOption("Day") to 86_400L, SlideOption("Week") to 604_800L, SlideOption("Month") to 2_592_000L)
+/** Filters the analytics server can preview: every id the filter uses must be on its list (Malware's can't). */
+internal fun canPreview(f: Filter, previewable: Set<String>): Boolean {
+    if (previewable.isEmpty() || f.pk == "malware") return false
+    val ids = if (f.levels.isEmpty()) listOf(f.pk) else f.levels.map { it.name }
+    return ids.all { it in previewable }
+}
 
-private class PreviewResult(val blocked: Long, val total: Long, val domains: List<CountItem>)
-
-/**
- * Filter Preview, as the dashboard's: what blocking [f] (at the chosen mode, when it has modes) would have done to
- * this profile's recent queries, the domains behind it with a one-tap Bypass rule each, and a button to turn it on.
- * Only reads until Allow or Block is tapped. The counts are Control D's estimate: today's list against past queries.
- */
-@Composable
-fun FilterPreview(pid: String, f: Filter, busy: Boolean, onBlock: (FilterLevel?) -> Unit) {
-    val session = LocalSession.current
-    val runner = rememberRunner()
-    val active = f.activeLevel?.let { f.levels.indexOf(it) }?.takeIf { f.enabled && it >= 0 }
-    // A filter that's on previews the next mode up; one that's off starts at its first mode.
-    var levelIdx by remember(f.pk) { mutableIntStateOf(((active ?: -1) + 1).coerceAtMost(f.levels.lastIndex).coerceAtLeast(0)) }
-    var rangeIdx by remember { mutableIntStateOf(1) }
-    var allowed by remember(f.pk) { mutableStateOf(emptySet<String>()) }
-    var showAll by remember(f.pk) { mutableStateOf(false) }
-
-    val level = f.levels.getOrNull(levelIdx)
-    // What the preview turns on. Malware's modes stack, so a mode means it and the ones below it.
-    val enable = when {
-        level == null -> listOf(f.pk)
-        f.pk == "malware" -> f.levels.take(levelIdx + 1).filter { it.type != "option" }.map { it.name }
-        else -> listOf(level.name)
-    }
-    val isCurrent = f.enabled && (level == null || levelIdx == active)
-
-    Column(Modifier.fillMaxWidth()) {
-        if (f.levels.size > 1) {
-            SlideSelector(f.levels.map { SlideOption(it.title) }, levelIdx, { levelIdx = it }, height = 40.dp)
-            Spacer(Modifier.height(8.dp))
-        }
-        SlideSelector(previewRanges.map { it.first }, rangeIdx, { rangeIdx = it }, height = 40.dp)
-        Spacer(Modifier.height(12.dp))
-
-        if (isCurrent) {
-            Text(
-                "This is what's on now. Pick another mode to see what it would change.",
-                color = Palette.Muted, style = MaterialTheme.typography.bodySmall,
-            )
-            return@Column
-        }
-
-        val loader = rememberLoader(pid, enable, rangeIdx) {
-            val region = session.analyticsRegion(null)
-            val (label, seconds) = previewRanges[rangeIdx].let { it.first.label to it.second }
-            val r = TimeRange("Last $label", seconds)
-            coroutineScope {
-                val blocked = async { session.api.simulationCount(region, r, pid, enable) }
-                val total = async { session.api.simulationCount(region, r, pid, null) }
-                val domains = async { session.api.simulationDomains(region, r, pid, enable) }
-                PreviewResult(blocked.await(), total.await(), domains.await())
-            }
-        }
-        val result = loader.data
-        when {
-            loader.error != null && result == null -> Text(loader.error!!, color = Palette.Red, style = MaterialTheme.typography.bodySmall)
-            result == null -> Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.Center) {
-                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-            }
-            else -> {
-                val n = NumberFormat.getIntegerInstance()
-                val share = if (result.total > 0) result.blocked * 100.0 / result.total else 0.0
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    PreviewStat("~${n.format(result.blocked)}", "queries would have been blocked", Modifier.weight(1f))
-                    PreviewStat(
-                        when { result.blocked == 0L -> "0%"; share < 0.1 -> "<0.1%"; else -> "%.1f%%".format(share) },
-                        "of this profile's traffic", Modifier.weight(1f),
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
-                if (result.domains.isEmpty()) {
-                    Text("Nothing you visited would have been blocked.", color = Palette.Muted, style = MaterialTheme.typography.bodySmall)
-                } else {
-                    Text(
-                        "Domains it would block. Tap Allow to keep one working (adds a Bypass rule).",
-                        color = Palette.Muted, style = MaterialTheme.typography.bodySmall,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    val shown = if (showAll) result.domains else result.domains.take(10)
-                    shown.forEach { d ->
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text(d.value, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
-                            Text(n.format(d.count), color = Palette.Muted, style = MaterialTheme.typography.labelMedium)
-                            Spacer(Modifier.width(4.dp))
-                            if (d.value in allowed) {
-                                Text("Allowed", Modifier.padding(horizontal = 12.dp, vertical = 12.dp), color = actionColor(Do.BYPASS), style = MaterialTheme.typography.labelLarge)
-                            } else {
-                                TextButton(enabled = !runner.busy, onClick = {
-                                    runner.run("Bypass rule added for ${d.value}") {
-                                        session.api.createRules(pid, listOf(d.value), Action(Do.BYPASS), 0, null)
-                                        allowed = allowed + d.value
-                                    }
-                                }) { Text("Allow") }
-                            }
-                        }
-                    }
-                    if (!showAll && result.domains.size > 10) {
-                        TextButton(onClick = { showAll = true }) { Text("Show ${result.domains.size - 10} more") }
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        CdButton(
-            "Block" + (level?.let { " · ${it.title}" } ?: ""),
-            onClick = { onBlock(level) },
-            modifier = Modifier.fillMaxWidth(),
-            busy = busy,
-            enabled = !busy,
-            tint = Palette.Red,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "Estimate: today's list matched against your past queries. Nothing changes until you tap Block or Allow.",
-            color = Palette.Muted, style = MaterialTheme.typography.labelSmall,
+/** The change from the filter as it is to [target] (null = off), as the dashboard builds it; null when nothing changes. */
+internal fun filterChange(f: Filter, target: FilterLevel?, targetOn: Boolean): FilterChange? {
+    val current = if (!f.enabled) null else f.activeLevel?.name ?: f.pk
+    val wanted = if (!targetOn) null else target?.name ?: f.pk
+    return when {
+        current == wanted -> null
+        current == null -> FilterChange(listOf(wanted!!), emptyList(), blocksMore = true)
+        wanted == null -> FilterChange(emptyList(), listOf(current), blocksMore = false)
+        else -> FilterChange(
+            listOf(wanted), listOf(current),
+            blocksMore = f.levels.indexOfFirst { it.name == wanted } > f.levels.indexOfFirst { it.name == current },
         )
     }
 }
 
+private val previewRanges = listOf("Last day" to 86_400L, "Last week" to 7 * 86_400L, "Last month" to 30 * 86_400L)
+
+/**
+ * The dashboard's filter Preview: what turning a filter on or off, or switching its mode, would have done to this
+ * profile's real traffic (Full Analytics logs), before applying it. [onApply] makes the change (on, and the level).
+ */
 @Composable
-private fun PreviewStat(value: String, label: String, modifier: Modifier = Modifier) {
-    CdCard(modifier) {
-        Column(Modifier.padding(12.dp)) {
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(label, color = Palette.Muted, style = MaterialTheme.typography.labelSmall)
+internal fun FilterPreviewSheet(pid: String, f: Filter, onDismiss: () -> Unit, onApply: (Boolean, FilterLevel?) -> Unit) {
+    val session = LocalSession.current
+    // Starts on the opposite of now: off for a filter that's on (as the dashboard), its first mode for one that's off.
+    var targetOn by remember { mutableStateOf(!f.enabled) }
+    var target by remember { mutableStateOf(if (f.enabled) null else f.levels.firstOrNull()) }
+    var range by remember { mutableStateOf(previewRanges[1]) }
+    var picking by remember { mutableStateOf(false) }
+    val change = filterChange(f, target, targetOn)
+    val result = rememberLoader(change, range) {
+        if (change == null) null
+        else try {
+            session.api.previewFilterChange(session.analyticsRegion(null), pid, change, TimeRange(range.first, range.second))
+        } catch (e: ApiException) {
+            throw ApiException(
+                when (e.code) {
+                    429 -> "Control D is busy right now. Try again in a moment."
+                    401, 403 -> "Control D doesn't allow previews with this API token."
+                    else -> e.message ?: "Couldn't load the preview"
+                }, e.code,
+            )
         }
+    }
+    val now = if (!f.enabled) "Allowed" else "Blocked" + (f.activeLevel?.let { " · ${it.title}" } ?: "")
+    val after = if (!targetOn) "Allowed" else "Blocked" + (target?.let { " · ${it.title}" } ?: "")
+    val title = when {
+        change == null -> "No change"
+        !f.enabled -> "Block ${f.name}"
+        !targetOn -> "Unblock ${f.name}"
+        else -> "Switch to ${target?.title}"
+    }
+    val good = change != null && !change.blocksMore
+
+    CdSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState())) {
+            Text("Preview: $title", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(4.dp))
+            SelectBox(range.first) { picking = true }
+            if (f.levels.isNotEmpty()) {
+                SectionHeader("Filter mode")
+                val options = listOf<FilterLevel?>(null) + f.levels
+                SlideSelector(
+                    options.map { SlideOption(it?.title ?: "Off") },
+                    if (!targetOn) 0 else options.indexOf(target).coerceAtLeast(0),
+                    { i -> targetOn = i > 0; target = options[i] },
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("NOW", style = MaterialTheme.typography.labelSmall, color = Palette.Muted)
+                Spacer(Modifier.width(6.dp))
+                StatePill(now, if (f.enabled) Palette.Red else Palette.Teal)
+                Text("  ›  ", color = Palette.Muted)
+                Text("AFTER", style = MaterialTheme.typography.labelSmall, color = Palette.Muted)
+                Spacer(Modifier.width(6.dp))
+                StatePill(after, if (targetOn) Palette.Red else Palette.Teal)
+            }
+            Spacer(Modifier.height(12.dp))
+            val r = result.data
+            when {
+                change == null -> Text("Pick a different mode to see what would change.", color = Palette.Muted, style = MaterialTheme.typography.bodySmall)
+                r == null && result.loading -> LinearProgressIndicator(Modifier.fillMaxWidth())
+                r == null -> Text(result.error ?: "", color = Palette.Red, style = MaterialTheme.typography.bodySmall)
+                r.actual == 0L -> Text("No recorded traffic in this period. Previews use endpoints with Full Analytics.", color = Palette.Muted, style = MaterialTheme.typography.bodySmall)
+                else -> {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatBox(if (good) "Would have been allowed" else "Would have been blocked", "~${"%,d".format(r.impact)}", if (good) Palette.Teal else Palette.Red, Modifier.weight(1f))
+                        val share = r.impact * 100.0 / r.actual
+                        StatBox("Share of traffic", if (share > 0 && share < 0.1) "<0.1%" else "%.1f%%".format(share), Palette.Text, Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "An estimate: today's ${f.name} list matched against your Full Analytics traffic. Queries your Rules and Services " +
+                            "already handle are left out" + if (good) ", and another enabled filter may still block some of these." else ".",
+                        style = MaterialTheme.typography.labelSmall, color = Palette.Muted,
+                    )
+                    SectionHeader("Domains · ${if (r.domains.size >= 100) "100+" else r.domains.size}")
+                    if (r.domains.isEmpty()) Text("No domains affected", color = Palette.Muted, style = MaterialTheme.typography.bodySmall)
+                    r.domains.forEach { d ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(d.value, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text("%,d".format(d.count), style = MaterialTheme.typography.labelMedium, color = Palette.Muted)
+                            Spacer(Modifier.width(10.dp))
+                            Text(if (good) "✓ Allowed" else "⊘ Blocked", style = MaterialTheme.typography.labelMedium, color = if (good) Palette.Teal else Palette.Red)
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                CdButton("Cancel", onDismiss, Modifier.weight(1f))
+                CdButton(title, { onApply(targetOn, target); onDismiss() }, Modifier.weight(1f), enabled = change != null, tint = Palette.Teal)
+            }
+        }
+    }
+    if (picking) PickerDialog("Period", previewRanges, label = { it.first }, selected = { it == range }, onDismiss = { picking = false }) { range = it }
+}
+
+@Composable
+private fun StatePill(text: String, color: Color) {
+    Text(
+        text, style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1,
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.14f)).padding(horizontal = 8.dp, vertical = 3.dp),
+    )
+}
+
+@Composable
+private fun StatBox(label: String, value: String, color: Color, modifier: Modifier) {
+    Column(modifier.clip(CdShape).background(Palette.CardHigh).padding(12.dp)) {
+        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Palette.Muted, maxLines = 2)
+        Spacer(Modifier.height(4.dp))
+        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = color)
     }
 }

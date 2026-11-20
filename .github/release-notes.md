@@ -3,6 +3,9 @@
 ### New
 - **Create a rule from any app:** share a link (from Chrome or anywhere) to DNS OTG, and Create Rule opens on top with the domain filled in. Pick the profile, folder and action, tap Create, and you're back where you were.
 
+- **Filter preview:** see what turning a filter on or off, or changing its mode, would have done to your real traffic (queries affected, share and top domains) before you apply it
+- **Remove services:** delete a service from a profile, or every service in a category, like the dashboard
+
 ### Improved
 - Services: the Configured list is grouped by category (Audio, Gaming…), like the dashboard
 - Rule folders look like the dashboard's: a folder icon with the folder's action as a badge (Do Not Log and Control D Bypass included), and counts like "3 Block Rules" or "No Rules"
