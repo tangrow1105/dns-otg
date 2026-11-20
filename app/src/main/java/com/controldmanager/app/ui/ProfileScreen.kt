@@ -191,6 +191,9 @@ private fun NativeFilters(pid: String) {
     val runner = rememberRunner()
     val loader = rememberLoader(pid) { session.api.nativeFilters(pid) }
     var open by remember { mutableStateOf<Filter?>(null) }
+    var previewing by remember { mutableStateOf<Filter?>(null) }
+    // Which filters Control D can preview (an empty set hides the preview buttons).
+    val previewable = rememberLoader(pid) { runCatching { session.api.previewableFilters(session.analyticsRegion(null)) }.getOrDefault(emptySet()) }
     // A mode being saved: its filter's switches spin, and the selector shows the new mode straight away.
     var pendingLevel by remember { mutableStateOf<Pair<String, String>?>(null) }
 
@@ -220,6 +223,9 @@ private fun NativeFilters(pid: String) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(filterIcon(f.pk, f.name), null, Modifier.size(26.dp), tint = if (f.enabled) Palette.Text else Palette.Muted)
                             Spacer(Modifier.weight(1f))
+                            if (canPreview(f, previewable.data.orEmpty())) IconButton(onClick = { previewing = f }, Modifier.size(36.dp)) {
+                                Icon(Solar.MagnifierCheck, "Preview ${f.name} filter change", Modifier.size(20.dp), tint = Palette.Muted)
+                            }
                             CdSwitch(f.enabled, { update(f, it) }, busy = runner.busy, spinning = pendingLevel?.first == f.pk)
                         }
                         Spacer(Modifier.height(6.dp))
@@ -235,6 +241,9 @@ private fun NativeFilters(pid: String) {
         }
     }
 
+    previewing?.let { f ->
+        FilterPreviewSheet(pid, f, onDismiss = { previewing = null }) { on, level -> update(f, on, level) }
+    }
     open?.let { f ->
         CdSheet(onDismissRequest = { open = null }) {
             Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 32.dp).verticalScroll(rememberScrollState())) {
@@ -434,7 +443,7 @@ private fun OptionCard(
 }
 
 @Composable
-private fun SelectBox(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun SelectBox(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     CdFieldCard(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(label, modifier = Modifier.weight(1f))

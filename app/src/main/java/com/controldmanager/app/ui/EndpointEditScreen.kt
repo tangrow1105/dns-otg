@@ -125,6 +125,7 @@ fun EndpointScreen(nav: NavHostController, id: String) {
     var original by remember(dev, blank != null) { mutableStateOf(dev?.let { EndpointForm.of(it) } ?: blank) }
     var form by remember(dev, blank != null) { mutableStateOf(original) }
     var advanced by remember { mutableStateOf(false) }
+    var confirmDo53Off by remember { mutableStateOf(false) }
     var pick by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
     // Which request is running, so only its own button spins.
@@ -264,9 +265,17 @@ fun EndpointScreen(nav: NavHostController, id: String) {
                             Icon(if (advanced) Solar.ExpandLess else Solar.ExpandMore, null)
                         }
                         if (advanced) {
-                            AdvancedRow("adv-legacy", "Legacy DNS", "Enable plain DNS resolver IPs for devices that cannot use encrypted DNS.", f.legacy, onChange = {
-                                update { copy(legacy = it) }
+                            // Control D's Do53 (formerly Legacy DNS). Turning it off gives the plain DNS IPs back, so it asks first.
+                            AdvancedRow("adv-legacy", "Do53 (DNS over port 53)", "Enable plain DNS resolver IPs for devices that cannot use encrypted DNS.", f.legacy, onChange = {
+                                if (!it && f.legacy) confirmDo53Off = true else update { copy(legacy = it) }
                             })
+                            // The dashboard's own warning, word for word.
+                            if (confirmDo53Off) ConfirmDialog(
+                                "Turn off Do53?",
+                                "Disabling this option will re-claim Do53 IPs you were issued previously. This will prevent Control D " +
+                                    "from enforcing your rules if you use Do53. Are you sure you want to do this?",
+                                confirmLabel = "Yes", onDismiss = { confirmDo53Off = false },
+                            ) { update { copy(legacy = false) } }
                             AdvancedRow("adv-secure", "Authorize by Secure DNS", "Authorize the network after a successful Secure DNS query from this Endpoint.", f.learnIp, onChange = {
                                 update { copy(learnIp = it) }
                             })
@@ -464,7 +473,7 @@ fun EndpointResolversScreen(nav: NavHostController, id: String) {
                     }
                 }
                 if (d.legacyIpv4Enabled || r?.v4?.isNotEmpty() == true) {
-                    ResolverSectionHeader("LEGACY DNS", "UNENCRYPTED", Solar.LockOpen)
+                    ResolverSectionHeader("DO53", "UNENCRYPTED", Solar.LockOpen)
                     CdCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             r?.v4?.takeIf { it.isNotEmpty() }?.let { v4 ->

@@ -191,6 +191,11 @@ fun CdTheme(content: @Composable () -> Unit) {
                 isAppearanceLightStatusBars = light
                 isAppearanceLightNavigationBars = light
             }
+            // The desktop window's buttons too (dark ones on the light theme), now that its title bar is see-through.
+            if (android.os.Build.VERSION.SDK_INT >= 35) w.insetsController?.setSystemBarsAppearance(
+                if (light) android.view.WindowInsetsController.APPEARANCE_LIGHT_CAPTION_BARS else 0,
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_CAPTION_BARS,
+            )
         }
     }
     MaterialTheme(colorScheme = colorScheme(), shapes = shapes(), content = content)

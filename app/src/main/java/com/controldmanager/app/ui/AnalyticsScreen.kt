@@ -98,7 +98,7 @@ private fun statColor(action: Int) = when (action) {
 
 /** Protocols in the Encrypted DNS menu: API value, label, icon asset. */
 private val protocols = listOf(
-    Triple("legacy", "Legacy DNS", "proto-legacy"),
+    Triple("legacy", "Do53", "proto-legacy"),
     Triple("doh", "DNS-over-HTTPS", "proto-doh"),
     Triple("dot", "DNS-over-TLS", "proto-dot"),
     Triple("doq", "DNS-over-QUIC", "proto-doq"),

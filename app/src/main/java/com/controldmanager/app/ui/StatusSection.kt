@@ -73,7 +73,7 @@ private fun protocolName(p: String?) = when (p?.lowercase()) {
     "doh3" -> "DNS-over-HTTPS/3"
     "dot" -> "DNS-over-TLS"
     "doq" -> "DNS-over-QUIC"
-    "legacy", "dns", "udp" -> "Legacy DNS"
+    "legacy", "dns", "udp" -> "Do53"
     null, "" -> "-"
     else -> p.uppercase()
 }

@@ -384,11 +384,9 @@ private fun RuleEditorDialog(
     var pickLocation by remember { mutableStateOf(false) }
     var pickExpiry by remember { mutableStateOf(false) }
     val hosts = (chips + splitHosts(input)).distinct()
-    // A folder with a Folder Rule decides the action for every domain in it (Control D Bypass skips Control D),
-    // so its domains have no action of their own to pick; editing one is just its comment, as on the dashboard.
-    val folderRule = folders.firstOrNull { it.pk == folder }?.let { f ->
-        f.action?.takeIf { it.doType >= 0 } ?: Action(Do.BYPASS).takeIf { f.name == MAGIC_BYPASS }
-    }
+    // A folder with a Folder Rule decides the action for every domain in it, so its domains have no action of their
+    // own to pick; editing one is just its comment, as on the dashboard. (Control D Bypass has none: its domains do.)
+    val folderRule = folders.firstOrNull { it.pk == folder }?.action?.takeIf { it.doType >= 0 }
     val commentOnly = existing != null && folderRule != null
     val valid = hosts.isNotEmpty() && (folderRule != null || when (doType) {
         Do.SPOOF -> spoofVia.isNotBlank()
@@ -458,8 +456,7 @@ private fun RuleEditorDialog(
 
                 Spacer(Modifier.height(14.dp))
                 if (folderRule != null) Text(
-                    if (folders.firstOrNull { it.pk == folder }?.name == MAGIC_BYPASS) "These domains skip Control D, as everything in this folder does."
-                    else "Follows the folder's rule: ${Do.label(folderRule.doType)}.",
+                    "Follows the folder's rule: ${Do.label(folderRule.doType)}.",
                     style = MaterialTheme.typography.bodySmall, color = Palette.Muted,
                 ) else {
                 Row(verticalAlignment = Alignment.CenterVertically) {

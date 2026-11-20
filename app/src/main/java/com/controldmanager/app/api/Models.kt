@@ -412,6 +412,13 @@ data class StatScope(
 /** One of Dragonfly's category groups (Tech, Tools & Network…); each category belongs to one group at most. */
 data class CategoryGroup(val id: String, val name: String, val categoryIds: List<String>)
 
+// ---------- Filter preview ----------
+
+/** A filter change to preview: filter or level ids to turn on and off; [blocksMore] counts newly blocked queries. */
+data class FilterChange(val enable: List<String>, val disable: List<String>, val blocksMore: Boolean)
+
+data class FilterPreview(val impact: Long, val actual: Long, val domains: List<CountItem>)
+
 // ---------- Control D's network (public status of its locations) ----------
 
 /** A service's state at a location: 1 online, 0 offline (an outage), -1 not offered there. */
