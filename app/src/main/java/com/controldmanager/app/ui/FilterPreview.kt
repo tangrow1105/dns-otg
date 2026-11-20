@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -83,8 +84,21 @@ internal fun FilterPreviewSheet(pid: String, f: Filter, onDismiss: () -> Unit, o
     val good = change != null && !change.blocksMore
 
     CdSheet(onDismissRequest = onDismiss) {
-        // The list scrolls; Cancel / Apply stay pinned at the bottom, with the list fading out behind them.
-        Column(Modifier.weight(1f, fill = false).padding(horizontal = 20.dp).verticalScroll(rememberScrollState())) {
+        // The list scrolls; Cancel / Apply stay pinned at the bottom, with the list fading out behind them, and at the
+        // top it fades under the sheet's edge once scrolled.
+        val scroll = rememberScrollState()
+        val topFade = Palette.Card
+        Column(
+            Modifier.weight(1f, fill = false)
+                .drawWithContent {
+                    drawContent()
+                    if (scroll.value > 0) drawRect(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(listOf(topFade, Color.Transparent), endY = 28.dp.toPx()),
+                        size = androidx.compose.ui.geometry.Size(size.width, 28.dp.toPx()),
+                    )
+                }
+                .verticalScroll(scroll).padding(horizontal = 20.dp),
+        ) {
             Text("Preview: $title", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(4.dp))
             SelectBox(range.first) { picking = true }
