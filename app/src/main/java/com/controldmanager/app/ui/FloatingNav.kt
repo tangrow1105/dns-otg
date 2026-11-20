@@ -678,7 +678,7 @@ class BottomSearchState {
  * [collapsed] screens (no nav bar) always show a small "Search" pill at the bottom that widens into the
  * bar when tapped; other screens show the bar only while open, in place of the nav bar.
  */
-class SearchRequest(val key: Any, val placeholder: String, val state: BottomSearchState, val collapsed: Boolean)
+class SearchRequest(val key: Any, val placeholder: String, val state: BottomSearchState, val collapsed: Boolean, val action: NavFab? = null)
 
 class SearchHostState {
     var active by mutableStateOf<SearchRequest?>(null)
@@ -711,14 +711,17 @@ val SearchPillSpace = 84.dp
  * always shown; otherwise the bar appears only while open (from a [SearchButton]).
  */
 @Composable
-fun BottomSearch(state: BottomSearchState, placeholder: String, collapsed: Boolean = false) {
+fun BottomSearch(state: BottomSearchState, placeholder: String, collapsed: Boolean = false, action: NavFab? = null) {
     val host = LocalSearchHost.current ?: return
     val key = remember { Any() }
     // Read during composition so opening/closing recomposes this and updates the host.
     val show = collapsed || state.open
     SideEffect {
         val cur = host.active
-        if (show) { if (cur?.key !== key || cur.placeholder != placeholder) host.active = SearchRequest(key, placeholder, state, collapsed) }
+        if (show) {
+            if (cur?.key !== key || cur.placeholder != placeholder || (cur.action == null) != (action == null))
+                host.active = SearchRequest(key, placeholder, state, collapsed, action)
+        }
         else if (cur?.key === key) host.active = null
     }
     DisposableEffect(Unit) { onDispose { if (host.active?.key === key) host.active = null } }
@@ -791,6 +794,21 @@ fun SearchOverlay(host: SearchHostState, haze: HazeState, onTab: Boolean = false
                         },
                     )
                     IconButton(onClick = { s.close() }) { Icon(Solar.Close, "Close search", tint = Palette.Text) }
+                }
+            }
+            // The screen's add button beside the pill, in the same glass as the tabs' one; hidden while searching.
+            r.action?.let { a ->
+                AnimatedVisibility(
+                    visible = !open,
+                    enter = scaleIn(spring(dampingRatio = Spring.DampingRatioLowBouncy)) + fadeIn(),
+                    exit = scaleOut(tween(150)) + fadeOut(tween(150)),
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                ) {
+                    Box(
+                        Modifier.size(50.dp).clip(CircleShape).hazeEffect(haze, Glass)
+                            .border(1.dp, GlassEdge, CircleShape).clickable(onClick = a.onClick),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(a.icon, a.label, tint = Palette.Teal, modifier = Modifier.size(24.dp)) }
                 }
             }
         }

@@ -7,6 +7,8 @@
 - Rule folders look like the dashboard's: a folder icon with the folder's action as a badge (Do Not Log and Control D Bypass included), and counts like "3 Block Rules" or "No Rules"
 
 ### Fixed
+- A folder's type (Standard or Magic) can't be switched when editing it, as on the dashboard
+- Inside a folder, the add button sits beside Search in the same glass style as the rest of the app
 - A profile's tab counts (filters, services, rules) update as soon as you change something
 - Names with special characters show correctly ("Kids & Teens" instead of "Kids &amp; Teens") for profiles, folders, filters, services, endpoints and rule comments
 

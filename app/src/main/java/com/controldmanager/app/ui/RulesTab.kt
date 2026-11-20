@@ -201,11 +201,13 @@ fun FolderScreen(nav: NavHostController, pid: String, fid: Int) {
     val runner = rememberRunner()
     val proxies = rememberLoader { runCatching { session.proxies() }.getOrDefault(emptyList()) }
     val loader = rememberLoader(pid, fid) { session.api.folders(pid) to session.api.rules(pid, fid) }
-    val search = rememberBottomSearch()
-    val q = search.query
-    BottomSearch(search, "Search domains", collapsed = true)
     var ruleDialog by remember { mutableStateOf<Rule?>(null) }
     var newRule by remember { mutableStateOf(false) }
+    val search = rememberBottomSearch()
+    val q = search.query
+    // Add sits beside the search pill, in the same glass as the tabs' add button.
+    val addRule = remember { NavFab("folder", Solar.Add, "Add rule") { newRule = true } }
+    BottomSearch(search, "Search domains", collapsed = true, action = addRule)
     var view by remember { mutableStateOf(RuleView()) }
     val folder = loader.data?.first?.firstOrNull { it.pk == fid }
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -222,9 +224,6 @@ fun FolderScreen(nav: NavHostController, pid: String, fid: Int) {
                     exporter.launch("${(folder?.name ?: "folder").replace(Regex("[^A-Za-z0-9 _-]"), "")}.json")
                 })
             }
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { newRule = true }, containerColor = Palette.Teal) { Icon(Solar.Add, "Add rule") }
         },
         contentWindowInsets = WindowInsets(0),
     ) { pad ->
@@ -685,6 +684,8 @@ private fun FolderEditorDialog(
     var redirectVia by remember { mutableStateOf(initial?.via?.takeIf { initial.doType == Do.REDIRECT } ?: proxies.firstOrNull()?.pk.orEmpty()) }
     var spoofVia by remember { mutableStateOf(initial?.via?.takeIf { initial.doType == Do.SPOOF }.orEmpty()) }
     var pickLocation by remember { mutableStateOf(false) }
+    // As on the dashboard, a folder's type (Standard, or which Magic) is set when it's created and can't change after.
+    val locked = existing != null
     // A magic folder can exist once per profile.
     val taken = folders.filter { it.pk != existing?.pk }.map { it.name }.toSet()
     val bypassMagic = magic && magicType == MAGIC_BYPASS
@@ -702,8 +703,8 @@ private fun FolderEditorDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FolderKindCard("Standard", "Organize or enforce a single rule for all DNS queries", Solar.Folder, !magic, Modifier.weight(1f)) { magic = false }
-                    FolderKindCard("Magic", "Change how matching DNS queries are handled", Solar.MagicStick, magic, Modifier.weight(1f), badge = "NEW") {
+                    FolderKindCard("Standard", "Organize or enforce a single rule for all DNS queries", Solar.Folder, !magic, Modifier.weight(1f), enabled = !locked) { magic = false }
+                    FolderKindCard("Magic", "Change how matching DNS queries are handled", Solar.MagicStick, magic, Modifier.weight(1f), badge = "NEW", enabled = !locked) {
                         magic = true
                         // Start on Control D Bypass (like the dashboard), or Do Not Log if Bypass already exists.
                         if (magicType == null || magicType in taken) {
@@ -712,6 +713,10 @@ private fun FolderEditorDialog(
                         }
                     }
                 }
+                if (locked) Text(
+                    "A folder's type can't be changed after it's created.",
+                    style = MaterialTheme.typography.bodySmall, color = Palette.Muted, modifier = Modifier.padding(top = 8.dp),
+                )
                 Spacer(Modifier.height(14.dp))
                 if (!magic) {
                     Text("Folder Name", style = MaterialTheme.typography.labelMedium, color = Palette.Muted)
@@ -733,7 +738,7 @@ private fun FolderEditorDialog(
                         MagicCard(
                             t, headline, if (exists) "Already in this profile." else body,
                             if (t == MAGIC_BYPASS) Solar.TransferVertical else Solar.EyeClosed,
-                            selected = magicType == t, enabled = !exists,
+                            selected = magicType == t, enabled = if (locked) magicType == t else !exists,
                         ) { magicType = t; if (t == MAGIC_BYPASS) ruleOn = false }
                         Spacer(Modifier.height(8.dp))
                     }
@@ -803,11 +808,15 @@ private fun FolderEditorDialog(
 }
 
 @Composable
-private fun FolderKindCard(title: String, body: String, icon: ImageVector, selected: Boolean, modifier: Modifier, badge: String? = null, onClick: () -> Unit) {
+private fun FolderKindCard(
+    title: String, body: String, icon: ImageVector, selected: Boolean, modifier: Modifier,
+    badge: String? = null, enabled: Boolean = true, onClick: () -> Unit,
+) {
     val edge = animateCdColor(if (selected) Palette.Teal.copy(alpha = 0.8f) else Palette.Outline.copy(alpha = 0.6f), label = "kindEdge")
     Column(
         modifier.clip(CdShape).background(if (selected) Palette.CardHigh else GroupFill)
-            .border(1.dp, edge, CdShape).clickable(onClick = onClick).padding(12.dp),
+            .border(1.dp, edge, CdShape).alpha(if (enabled || selected) 1f else 0.45f)
+            .clickable(enabled = enabled, onClick = onClick).padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, Modifier.size(20.dp), tint = if (selected) Palette.Text else Palette.Muted)
