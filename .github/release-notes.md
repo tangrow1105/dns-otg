@@ -1,7 +1,7 @@
 **Install:** download `DNS-OTG-1.0.6.apk` below and open it on your phone (Android 8.0 or newer). It updates earlier versions in place and keeps you signed in.
 
 ### New
-- **Create a rule from any app:** share a link (from Chrome or anywhere) to DNS OTG, and Create Rule opens on top with the domain filled in. Pick the profile, folder and action, tap Create, and you're back where you were.
+- **Create a rule from any app:** share a link (from Chrome or anywhere) to DNS OTG, and Create Rule opens on top with the domain filled in. Pick the profile, folder and action, tap Create, and you're back where you were. It uses the app's glass look, and on Android 12+ the app behind it is softly blurred.
 
 - **Filter preview:** see what turning a filter on or off, or changing its mode, would have done to your real traffic (queries affected, share and top domains) before you apply it
 - **Remove services:** delete a service from a profile, or every service in a category, like the dashboard
