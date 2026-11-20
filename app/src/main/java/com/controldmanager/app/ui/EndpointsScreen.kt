@@ -277,7 +277,7 @@ private fun AssetGlyph(name: String, size: Int, tint: Color) {
 /** Settings the dashboard's row status icon reports (only these two), in its order: (asset icon, label). */
 fun enabledFeatures(d: Device): List<Pair<String, String>> = buildList {
     if (d.learnIp) add("feat_secure" to "Authorize by Secure DNS")
-    if (d.legacyIpv4Enabled) add("feat_legacy" to "Legacy DNS")
+    if (d.legacyIpv4Enabled) add("feat_legacy" to "Do53")
 }
 
 /** Dashboard's status icon as a badge (like the Analytics / ctrld pills): first setting's icon plus "+N". */

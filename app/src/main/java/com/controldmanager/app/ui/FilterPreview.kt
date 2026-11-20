@@ -10,7 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -84,17 +84,23 @@ internal fun FilterPreviewSheet(pid: String, f: Filter, onDismiss: () -> Unit, o
     val good = change != null && !change.blocksMore
 
     CdSheet(onDismissRequest = onDismiss) {
-        // The list scrolls; Cancel / Apply stay pinned at the bottom, with the list fading out behind them, and at the
-        // top it fades under the sheet's edge once scrolled.
+        // The list scrolls; Cancel / Apply stay pinned at the bottom. The list itself fades to see-through at the
+        // edges it can scroll past, so the sheet's glass shows through (a painted colour can't match the blur).
         val scroll = rememberScrollState()
-        val topFade = Palette.Card
         Column(
             Modifier.weight(1f, fill = false)
+                .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
                 .drawWithContent {
                     drawContent()
-                    if (scroll.value > 0) drawRect(
-                        androidx.compose.ui.graphics.Brush.verticalGradient(listOf(topFade, Color.Transparent), endY = 28.dp.toPx()),
-                        size = androidx.compose.ui.geometry.Size(size.width, 28.dp.toPx()),
+                    val f = 28.dp.toPx() / size.height.coerceAtLeast(1f)
+                    drawRect(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            0f to (if (scroll.value > 0) Color.Transparent else Color.Black),
+                            f to Color.Black,
+                            1f - f to Color.Black,
+                            1f to (if (scroll.value < scroll.maxValue) Color.Transparent else Color.Black),
+                        ),
+                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
                     )
                 }
                 .verticalScroll(scroll).padding(horizontal = 20.dp),
@@ -160,16 +166,8 @@ internal fun FilterPreviewSheet(pid: String, f: Filter, onDismiss: () -> Unit, o
             !targetOn -> "Unblock"
             else -> "Switch to ${target?.title}"
         }
-        // The fade is drawn just above the buttons, over the end of the list.
-        val fade = Palette.Card
         Row(
-            Modifier.fillMaxWidth().drawBehind {
-                val h = 28.dp.toPx()
-                drawRect(
-                    androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, fade), startY = -h, endY = 0f),
-                    topLeft = androidx.compose.ui.geometry.Offset(0f, -h), size = androidx.compose.ui.geometry.Size(size.width, h),
-                )
-            }.padding(horizontal = 20.dp).padding(top = 4.dp, bottom = 4.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 4.dp, bottom = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             CdButton("Cancel", onDismiss, Modifier.weight(1f))
