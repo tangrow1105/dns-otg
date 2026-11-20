@@ -7,6 +7,7 @@
 - Rule folders show their action as a badge on the folder icon, and the count reads like "3 Block Rules"
 
 ### Fixed
+- A profile's tab counts (filters, services, rules) update as soon as you change something
 - Names with special characters show correctly ("Kids & Teens" instead of "Kids &amp; Teens") for profiles, folders, filters, services, endpoints and rule comments
 
 Thanks to @XBadFellaX for all of these!

@@ -87,6 +87,10 @@ fun ProfileScreen(nav: NavHostController, id: String) {
         },
         contentWindowInsets = WindowInsets(0),
     ) { pad ->
+        // Every change in the tabs refreshes the profile quietly, so the counts on the tabs follow straight away.
+        val scope = rememberCoroutineScope()
+        val refreshCounts = remember(profile) { { scope.launch { profile.refreshQuietly() }; Unit } }
+        CompositionLocalProvider(LocalOnChange provides refreshCounts) {
         Column(Modifier.padding(pad)) {
             ProfileTabs(
                 selected = tab.coerceAtMost(tabTitles.lastIndex),
@@ -98,6 +102,7 @@ fun ProfileScreen(nav: NavHostController, id: String) {
                 2 -> RulesTab(nav, id)
                 else -> ProfileOptionsTab(id, p) { profile.reload() }
             }
+        }
         }
     }
 

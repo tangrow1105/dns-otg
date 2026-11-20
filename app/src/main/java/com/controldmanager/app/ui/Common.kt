@@ -323,12 +323,16 @@ class Runner(private val scope: CoroutineScope, private val report: (String) -> 
 
     var busy by mutableStateOf(false)
 
+    /** Told after every change that went through (see [LocalOnChange]). */
+    var onChange: (() -> Unit)? = null
+
     fun run(success: String? = null, onDone: () -> Unit = {}, block: suspend () -> Unit) {
         scope.launch {
             busy = true
             try {
                 block()
                 success?.let(report)
+                onChange?.invoke()
                 onDone()
             } catch (e: CancellationException) {
                 throw e
@@ -341,11 +345,18 @@ class Runner(private val scope: CoroutineScope, private val report: (String) -> 
     }
 }
 
+/**
+ * Called after any change made on a screen goes through, by every [rememberRunner] inside it. A profile uses it to
+ * refresh the counts on its tabs (filters, services, rules) when something is added, removed or switched.
+ */
+val LocalOnChange = staticCompositionLocalOf<(() -> Unit)?> { null }
+
 @Composable
 fun rememberRunner(): Runner {
     val scope = rememberCoroutineScope()
     val snack = LocalSnackbar.current
-    return remember { Runner(scope, snack) }
+    val onChange = LocalOnChange.current
+    return remember { Runner(scope, snack).also { it.onChange = onChange } }
 }
 
 @Composable
