@@ -3,7 +3,6 @@ package com.controldmanager.app.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -181,7 +180,7 @@ internal fun FilterPreviewSheet(pid: String, f: Filter, onDismiss: () -> Unit, o
 private fun StatePill(text: String, color: Color) {
     Text(
         text, style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1,
-        modifier = Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.14f)).padding(horizontal = 8.dp, vertical = 3.dp),
+        modifier = Modifier.clip(CdPill).background(color.copy(alpha = 0.14f)).padding(horizontal = 8.dp, vertical = 3.dp),
     )
 }
 
