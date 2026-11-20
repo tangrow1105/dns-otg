@@ -234,7 +234,7 @@ fun parseProfile(o: JSONObject): Profile {
     val opt = p?.optJSONObject("opt")?.optJSONArray("data").objects()
     return Profile(
         pk = o.optString("PK"),
-        name = o.optString("name"),
+        name = o.optString("name").unescapeHtml(),
         updated = o.optLong("updated"),
         filters = count(p, "flt"),
         externalFilters = count(p, "cflt"),
@@ -261,12 +261,12 @@ fun parseProfile(o: JSONObject): Profile {
 
 fun parseFilter(o: JSONObject) = Filter(
     pk = o.optString("PK"),
-    name = o.optString("name", o.optString("PK")),
-    description = o.optString("description"),
+    name = o.optString("name", o.optString("PK")).unescapeHtml(),
+    description = o.optString("description").unescapeHtml(),
     status = o.optInt("status"),
     levels = o.optJSONArray("levels").objects().map {
         FilterLevel(
-            it.optString("title", it.optString("name")), it.optString("name"), it.optInt("status"),
+            it.optString("title", it.optString("name")).unescapeHtml(), it.optString("name"), it.optInt("status"),
             it.optString("type", "filter"), it.optJSONArray("opt").objects().firstOrNull()?.optStringOrNull("value"),
         )
     },
@@ -274,10 +274,10 @@ fun parseFilter(o: JSONObject) = Filter(
 
 fun parseService(o: JSONObject) = Service(
     pk = o.optString("PK"),
-    name = o.optString("name", o.optString("PK")),
+    name = o.optString("name", o.optString("PK")).unescapeHtml(),
     category = o.optString("category"),
     unlockLocation = o.optStringOrNull("unlock_location"),
-    warning = o.optStringOrNull("warning"),
+    warning = o.optStringOrNull("warning")?.unescapeHtml(),
     action = Action.parse(o.optJSONObject("action")),
 )
 
@@ -286,19 +286,19 @@ fun parseRule(o: JSONObject) = Rule(
     group = o.optInt("group"),
     order = o.optInt("order"),
     action = Action.parse(o.optJSONObject("action")),
-    comment = o.optStringOrNull("comment"),
+    comment = o.optStringOrNull("comment")?.unescapeHtml(),
     updated = parseTimeSec(o.opt("ts") ?: o.opt("updated")),
 )
 
 private fun parseRef(o: JSONObject?): ProfileRef? =
-    o?.optStringOrNull("PK")?.let { ProfileRef(it, o.optString("name")) }
+    o?.optStringOrNull("PK")?.let { ProfileRef(it, o.optString("name").unescapeHtml()) }
 
 fun parseDevice(o: JSONObject): Device {
     val r = o.optJSONObject("resolvers")
     val legacy = o.optJSONObject("legacy_ipv4")
     return Device(
         pk = o.optString("PK", o.optString("device_id")),
-        name = o.optString("name"),
+        name = o.optString("name").unescapeHtml(),
         icon = o.optString("icon"),
         status = o.optInt("status"),
         stats = o.optInt("stats"),

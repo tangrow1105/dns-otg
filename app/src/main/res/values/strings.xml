@@ -4,4 +4,5 @@
     <string name="widget_wide_label">DNS OTG activity</string>
     <string name="widget_small_description">Beta: blocked share and query counts</string>
     <string name="widget_wide_description">Beta: blocked share with an activity chart</string>
+    <string name="share_label">Create rule</string>
 </resources>
