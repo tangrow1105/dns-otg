@@ -217,7 +217,7 @@ fun DeviceIconWithActivity(d: Device, size: Int = 28) {
                 fontSize = 8.sp, lineHeight = 10.sp, fontWeight = FontWeight.Bold, color = ActivityInk,
                 modifier = Modifier
                     .offset(y = (-3).dp)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                    .clip(CdPill)
                     .background(activityColor(d.lastActivity, now))
                     .padding(horizontal = 4.dp),
             )
@@ -230,7 +230,7 @@ private fun CounterChip(icon: ImageVector, count: Int, onClick: () -> Unit) {
     Row(
         Modifier
             .height(34.dp)
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+            .clip(CdPill)
             .background(Palette.CardHigh)
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp),
@@ -248,7 +248,7 @@ private fun AccessChip(clients: Int, ips: Int, onClick: () -> Unit) {
     Row(
         Modifier
             .height(34.dp)
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+            .clip(CdPill)
             .background(Palette.CardHigh)
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp),
@@ -287,7 +287,7 @@ private fun FeatureBadge(d: Device) {
     if (features.isEmpty()) return
     Row(
         Modifier
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+            .clip(CdPill)
             .background(Palette.Muted.copy(alpha = 0.14f))
             // Same padding as Pill, so it lines up with the Analytics / ctrld labels.
             .padding(horizontal = 8.dp, vertical = 2.dp),

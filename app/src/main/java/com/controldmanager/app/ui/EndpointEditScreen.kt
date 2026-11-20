@@ -10,7 +10,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -674,7 +673,7 @@ private fun EndpointTypePicker(types: List<DeviceTypeGroup>, selected: String, o
                 Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                     shown.forEach { (key, label) ->
                         Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                            Modifier.fillMaxWidth().clip(cdShape(8))
                                 .background(if (key == selected) Palette.CardHigh else androidx.compose.ui.graphics.Color.Transparent)
                                 .clickable { onPick(key); onDismiss() }
                                 .padding(horizontal = 8.dp, vertical = 10.dp),

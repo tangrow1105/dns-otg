@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -83,7 +82,7 @@ private fun LocationRow(l: PopLocation, you: Boolean) {
                     Spacer(Modifier.width(8.dp))
                     Text(
                         "You", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Palette.Teal,
-                        modifier = Modifier.clip(RoundedCornerShape(50)).background(Palette.Teal.copy(alpha = 0.16f)).padding(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.clip(CdPill).background(Palette.Teal.copy(alpha = 0.16f)).padding(horizontal = 8.dp, vertical = 2.dp),
                     )
                 }
             }
@@ -106,6 +105,6 @@ private fun ServiceChip(name: String, state: Int) {
     }
     Text(
         text, style = MaterialTheme.typography.labelMedium, color = color,
-        modifier = Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 3.dp),
+        modifier = Modifier.clip(CdPill).background(color.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 3.dp),
     )
 }

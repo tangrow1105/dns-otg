@@ -27,6 +27,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,33 +56,39 @@ object Palette {
     val light: Boolean get() = t >= 0.5f
     /** [dark] → [lightColor] by the current theme blend. */
     fun mix(dark: Color, lightColor: Color): Color = if (t <= 0f) dark else if (t >= 1f) lightColor else androidx.compose.ui.graphics.lerp(dark, lightColor, t)
-    val Bg get() = mix(Color(0xFF080B17), Color(0xFFEBECF3))
-    val Card get() = mix(Color(0xFF111628), Color(0xFFFFFFFF))
-    val CardHigh get() = mix(Color(0xFF1A2038), Color(0xFFF2F3F8))
-    val Outline get() = mix(Color(0xFF262D4A), Color(0xFFD8DBE6))
-    /** The one accent: Control D green-teal (deeper green in light mode, as the dashboard). */
-    val Teal get() = mix(Color(0xFF2FD8A2), Color(0xFF18C13E))
+    private fun mix(pair: Pair<Color, Color>) = mix(pair.first, pair.second)
+    // Backgrounds, cards and text follow the chosen surface (Preferences → Appearance; Navy by default).
+    val Bg get() = mix(Appearance.surface.bg)
+    val Card get() = mix(Appearance.surface.card)
+    val CardHigh get() = mix(Appearance.surface.cardHigh)
+    val Outline get() = mix(Appearance.surface.outline)
+    /** The one accent, as chosen in Appearance: Control D green-teal by default (deeper green in light mode, as the dashboard). */
+    val Teal get() = mix(Appearance.accent.dark, Appearance.accent.light)
+    /** Bypass keeps Control D's green-teal whatever the accent, so actions stay told apart by colour. */
+    val Bypass get() = mix(Color(0xFF2FD8A2), Color(0xFF18C13E))
     val Purple get() = mix(Color(0xFF7B61FF), Color(0xFF593EA5))
     val Orange get() = mix(Color(0xFFF5A524), Color(0xFFD98200))
     val Red get() = mix(Color(0xFFF2545B), Color(0xFFE93349))
     val Blue get() = mix(Color(0xFF4EA8FF), Color(0xFF2F7FE0))
-    val Text get() = mix(Color(0xFFE8EBF7), Color(0xFF0E1018))
-    val Muted get() = mix(Color(0xFF8B93B3), Color(0xFF656A7A))
+    val Text get() = mix(Appearance.surface.text)
+    val Muted get() = mix(Appearance.surface.muted)
     /** Foreground "ink" for translucent overlays: white on dark, black on light. */
     val Ink get() = mix(Color.White, Color.Black)
+    /** Readable ink on a solid [fill]: near-black on bright colours, white on deep ones. */
+    fun inkOn(fill: Color): Color = if (fill.luminance() > 0.179f) Color(0xFF0E1018) else Color.White
     /** Text/icon colour on top of a [Teal] fill. */
-    val OnAccent get() = mix(Color(0xFF002A1C), Color.White)
+    val OnAccent get() = mix(Appearance.accent.onDark, Appearance.accent.onLight)
 }
 
 private fun colorScheme() = if (Palette.light) lightColorScheme(
     primary = Palette.Teal,
     onPrimary = Palette.OnAccent,
     primaryContainer = Palette.Teal.copy(alpha = 0.16f),
-    onPrimaryContainer = Color(0xFF0C6B22),
+    onPrimaryContainer = Appearance.accent.lightOnContainer,
     secondary = Palette.Teal,
-    onSecondary = Color.White,
+    onSecondary = Palette.OnAccent,
     secondaryContainer = Palette.Teal.copy(alpha = 0.16f),
-    onSecondaryContainer = Color(0xFF0C6B22),
+    onSecondaryContainer = Appearance.accent.lightOnContainer,
     tertiary = Palette.Orange,
     background = Palette.Bg,
     onBackground = Palette.Text,
@@ -90,22 +97,22 @@ private fun colorScheme() = if (Palette.light) lightColorScheme(
     surfaceVariant = Palette.CardHigh,
     onSurfaceVariant = Palette.Muted,
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF7F8FB),
+    surfaceContainerLow = Appearance.surface.lightLow,
     surfaceContainer = Palette.Card,
     surfaceContainerHigh = Palette.CardHigh,
-    surfaceContainerHighest = Color(0xFFE6E8F0),
+    surfaceContainerHighest = Appearance.surface.lightHighest,
     outline = Palette.Outline,
-    outlineVariant = Color(0xFFE3E5EE),
+    outlineVariant = Appearance.surface.lightOutlineVariant,
     error = Palette.Red,
 ) else darkColorScheme(
     primary = Palette.Teal,
     onPrimary = Palette.OnAccent,
-    primaryContainer = Color(0xFF0F3B30),
+    primaryContainer = Appearance.accent.darkContainer,
     onPrimaryContainer = Palette.Teal,
     // Selected chips and other "secondary" accents use the same teal, so there's one accent colour.
     secondary = Palette.Teal,
     onSecondary = Palette.OnAccent,
-    secondaryContainer = Color(0xFF0F3B30),
+    secondaryContainer = Appearance.accent.darkContainer,
     onSecondaryContainer = Palette.Teal,
     tertiary = Palette.Orange,
     background = Palette.Bg,
@@ -115,22 +122,29 @@ private fun colorScheme() = if (Palette.light) lightColorScheme(
     surfaceVariant = Palette.CardHigh,
     onSurfaceVariant = Palette.Muted,
     surfaceContainerLowest = Palette.Bg,
-    surfaceContainerLow = Color(0xFF0D1120),
+    surfaceContainerLow = Appearance.surface.darkLow,
     surfaceContainer = Palette.Card,
     surfaceContainerHigh = Palette.CardHigh,
-    surfaceContainerHighest = Color(0xFF212844),
+    surfaceContainerHighest = Appearance.surface.darkHighest,
     outline = Palette.Outline,
-    outlineVariant = Color(0xFF1C2238),
+    outlineVariant = Appearance.surface.darkOutlineVariant,
     error = Palette.Red,
 )
 
-/** One corner radius for every box, field, card, dialog and button (floating pills stay fully round). */
-val CdCorner = 20.dp
-val CdShape = RoundedCornerShape(CdCorner)
+/**
+ * One corner radius for every box, field, card, dialog and button (floating pills stay fully round).
+ * Set in Preferences → Appearance, 20 dp by default.
+ */
+val CdCorner get() = Appearance.corner.dp
+val CdShape get() = RoundedCornerShape(CdCorner)
 
-private val shapes = Shapes(
-    extraSmall = CdShape, small = CdShape, medium = CdShape, large = CdShape, extraLarge = CdShape,
-)
+/** A smaller radius, [atDefault] dp at the default setting, scaled with it (square when corners are 0). */
+fun cdShape(atDefault: Int) = RoundedCornerShape(CdCorner * (atDefault.toFloat() / Appearance.DEFAULT_CORNER))
+
+/** Chips, tabs and bars: fully round at the default setting and above, squarer below it. */
+val CdPill get() = RoundedCornerShape(percent = (Appearance.corner * 50 / Appearance.DEFAULT_CORNER).coerceAtMost(50))
+
+private fun shapes() = CdShape.let { Shapes(extraSmall = it, small = it, medium = it, large = it, extraLarge = it) }
 
 /** Where a widget tap should land: Statistics for the widget's range (label, seconds), then cleared. */
 object OpenRequest {
@@ -159,7 +173,7 @@ object ThemePref {
 @Composable
 fun CdTheme(content: @Composable () -> Unit) {
     val ctx = LocalContext.current
-    remember { ThemePref.load(ctx) }
+    remember { ThemePref.load(ctx); Appearance.load(ctx) }
     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
     val target = when (ThemePref.mode) { "light" -> true; "dark" -> false; else -> !systemDark }
     // First frame: apply straight away. Later changes blend every colour over ~0.45s.
@@ -184,12 +198,12 @@ fun CdTheme(content: @Composable () -> Unit) {
             )
         }
     }
-    MaterialTheme(colorScheme = colorScheme(), shapes = shapes, content = content)
+    MaterialTheme(colorScheme = colorScheme(), shapes = shapes(), content = content)
 }
 
 fun actionColor(d: Int) = when (d) {
     Do.BLOCK -> Palette.Red
-    Do.BYPASS -> Palette.Teal
+    Do.BYPASS -> Palette.Bypass
     Do.SPOOF -> Palette.Orange
     Do.REDIRECT -> Palette.Purple
     else -> Palette.Muted
@@ -447,7 +461,7 @@ fun Pill(text: String, color: Color, modifier: Modifier = Modifier) {
         fontSize = 11.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = modifier
-            .clip(RoundedCornerShape(50))
+            .clip(CdPill)
             .background(color.copy(alpha = 0.14f))
             .padding(horizontal = 8.dp, vertical = 2.dp),
     )
@@ -462,7 +476,7 @@ fun ActionPill(action: Action?, proxies: List<Proxy> = emptyList()) {
     if (action.doType == Do.REDIRECT && action.via != null) {
         val p = proxies.firstOrNull { it.pk == action.via }
         Row(
-            Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.14f))
+            Modifier.clip(CdPill).background(color.copy(alpha = 0.14f))
                 .padding(start = 3.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

@@ -3,7 +3,6 @@ package com.controldmanager.app.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -126,7 +125,7 @@ private fun CategoryViews(d: CategoryStats, refinement: String?, onRefine: (Stri
     val refinedTotal = d.refinedTotal ?: 0L
     // ‹ All categories / Group: the group is a step back up when a single category is chosen.
     Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.clip(RoundedCornerShape(6.dp)).clickable { onRefine(null) }.padding(vertical = 4.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.clip(cdShape(6)).clickable { onRefine(null) }.padding(vertical = 4.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Solar.ChevronLeft, null, Modifier.size(16.dp), tint = Palette.Muted)
             Text("All categories", style = MaterialTheme.typography.labelLarge, color = Palette.Muted)
         }
@@ -134,7 +133,7 @@ private fun CategoryViews(d: CategoryStats, refinement: String?, onRefine: (Stri
             Text("  /  ", style = MaterialTheme.typography.labelLarge, color = Palette.Muted)
             Text(
                 group.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = if (single != null) Modifier.clip(RoundedCornerShape(6.dp)).clickable { onRefine(GROUP_PREFIX + group.id) }.padding(vertical = 4.dp, horizontal = 2.dp) else Modifier,
+                modifier = if (single != null) Modifier.clip(cdShape(6)).clickable { onRefine(GROUP_PREFIX + group.id) }.padding(vertical = 4.dp, horizontal = 2.dp) else Modifier,
             )
         }
     }
@@ -159,7 +158,7 @@ private fun Hint(text: String) {
 private fun CategoryRow(label: String, count: Long, of: Long, muted: Boolean = false, chevron: Boolean = false, onClick: (() -> Unit)? = null) {
     val share = if (of > 0) (count.toFloat() / of).coerceIn(0f, 1f) else 0f
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+        Modifier.fillMaxWidth().clip(cdShape(8))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 4.dp, vertical = 7.dp),
     ) {
@@ -172,8 +171,8 @@ private fun CategoryRow(label: String, count: Long, of: Long, muted: Boolean = f
             }
         }
         Spacer(Modifier.height(6.dp))
-        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(50)).background(Palette.Outline)) {
-            Box(Modifier.fillMaxWidth(share).fillMaxHeight().clip(RoundedCornerShape(50)).background(if (muted) Palette.Muted else Palette.Teal))
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(CdPill).background(Palette.Outline)) {
+            Box(Modifier.fillMaxWidth(share).fillMaxHeight().clip(CdPill).background(if (muted) Palette.Muted else Palette.Teal))
         }
     }
 }

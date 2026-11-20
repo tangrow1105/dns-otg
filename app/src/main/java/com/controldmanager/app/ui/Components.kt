@@ -13,7 +13,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -109,7 +108,7 @@ fun CdChip(
 ) {
     val bg = animateCdColor(if (selected) color.copy(alpha = 0.16f) else FieldFill, tween(200), label = "chipBg")
     val fg = animateCdColor(if (selected) color else Palette.Text, tween(200), label = "chipFg")
-    val shape = RoundedCornerShape(50)
+    val shape = CdPill
     Row(
         modifier
             .height(36.dp)
@@ -149,11 +148,11 @@ fun ShimmerList(modifier: Modifier = Modifier, rows: Int = 6) {
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         repeat(rows) { i ->
             Column(Modifier.fillMaxWidth().clip(CdShape).background(Palette.Card).padding(16.dp)) {
-                Box(Modifier.fillMaxWidth(if (i % 2 == 0) 0.55f else 0.4f).height(16.dp).clip(RoundedCornerShape(8.dp)).background(brush))
+                Box(Modifier.fillMaxWidth(if (i % 2 == 0) 0.55f else 0.4f).height(16.dp).clip(cdShape(8)).background(brush))
                 Spacer(Modifier.height(10.dp))
-                Box(Modifier.fillMaxWidth(0.85f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(brush))
+                Box(Modifier.fillMaxWidth(0.85f).height(12.dp).clip(cdShape(6)).background(brush))
                 Spacer(Modifier.height(6.dp))
-                Box(Modifier.fillMaxWidth(0.6f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(brush))
+                Box(Modifier.fillMaxWidth(0.6f).height(12.dp).clip(cdShape(6)).background(brush))
             }
         }
     }

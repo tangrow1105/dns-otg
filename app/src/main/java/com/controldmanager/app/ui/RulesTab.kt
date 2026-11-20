@@ -8,7 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -414,7 +413,7 @@ private fun RuleEditorDialog(
                     if (chips.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         chips.forEach { h ->
                             Row(
-                                Modifier.clip(RoundedCornerShape(8.dp)).background(Palette.CardHigh).padding(start = 8.dp, end = 4.dp, top = 3.dp, bottom = 3.dp),
+                                Modifier.clip(cdShape(8)).background(Palette.CardHigh).padding(start = 8.dp, end = 4.dp, top = 3.dp, bottom = 3.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(h, style = MaterialTheme.typography.bodySmall)
@@ -641,11 +640,11 @@ private fun ExpiryDialog(current: Long?, onDismiss: () -> Unit, onPick: (Long) -
                     listOf("1 hour" to 3_600L, "1 day" to 86_400L, "1 week" to 604_800L, "1 month" to 2_592_000L).forEach { (label, secs) ->
                         Text(
                             label,
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onPick(now / 1000 + secs); onDismiss() }.padding(vertical = 12.dp, horizontal = 4.dp),
+                            Modifier.fillMaxWidth().clip(cdShape(8)).clickable { onPick(now / 1000 + secs); onDismiss() }.padding(vertical = 12.dp, horizontal = 4.dp),
                         )
                     }
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { step = 1 }.padding(vertical = 12.dp, horizontal = 4.dp),
+                        Modifier.fillMaxWidth().clip(cdShape(8)).clickable { step = 1 }.padding(vertical = 12.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(Solar.CalendarMonth, null, Modifier.size(18.dp), tint = Palette.Teal)
@@ -864,7 +863,7 @@ private fun MagicCard(title: String, headline: String, body: String, icon: Image
             .clickable(enabled = enabled, onClick = onClick).padding(14.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(Palette.Teal.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(36.dp).clip(cdShape(10)).background(Palette.Teal.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
             Icon(icon, null, Modifier.size(20.dp), tint = Palette.Teal)
         }
         Spacer(Modifier.width(12.dp))
