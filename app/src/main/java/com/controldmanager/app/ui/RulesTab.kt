@@ -307,34 +307,37 @@ private fun FolderCard(f: RuleFolder, proxies: List<Proxy>, onOpen: () -> Unit, 
     var menu by remember { mutableStateOf(false) }
     CdCard(Modifier.fillMaxWidth(), onClick = onOpen) {
         Row(Modifier.padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            // As the dashboard: a plain folder icon with the folder's action as a small badge on its corner.
-            val action = f.action?.takeIf { it.doType >= 0 && !isMagicFolder(f.name) }
+            // As the dashboard: every folder is a plain folder icon, with its action as a small badge on the corner.
+            // "Do Not Log" shows its action like any folder; "Control D Bypass" has its own badge (it skips Control D).
+            val action = f.action?.takeIf { it.doType >= 0 && f.name != MAGIC_BYPASS }
             Box(contentAlignment = Alignment.BottomEnd) {
-                Icon(
-                    when (f.name) { MAGIC_BYPASS -> Solar.TransferVertical; MAGIC_NO_LOG -> Solar.EyeClosed; else -> Solar.Folder },
-                    null, Modifier.size(24.dp), tint = if (isMagicFolder(f.name)) Palette.Teal else Palette.Text,
-                )
-                val badge = when (action?.doType) {
-                    Do.BLOCK -> Solar.Forbidden
-                    Do.BYPASS -> Solar.Check
-                    Do.REDIRECT -> Solar.Routing
-                    Do.SPOOF -> Solar.Global
-                    else -> null
+                Icon(Solar.Folder, null, Modifier.size(24.dp), tint = Palette.Text)
+                val (badge, tint) = when {
+                    f.name == MAGIC_BYPASS -> Solar.TransferVertical to Palette.Teal
+                    action?.doType == Do.BLOCK -> Solar.Forbidden to actionColor(Do.BLOCK)
+                    action?.doType == Do.BYPASS -> Solar.Check to actionColor(Do.BYPASS)
+                    action?.doType == Do.REDIRECT -> Solar.Routing to actionColor(Do.REDIRECT)
+                    action?.doType == Do.SPOOF -> Solar.Global to actionColor(Do.SPOOF)
+                    f.name == MAGIC_NO_LOG -> Solar.EyeClosed to Palette.Teal
+                    else -> null to Palette.Muted
                 }
-                if (action != null && badge != null) {
+                if (badge != null) {
                     Box(
                         Modifier.offset(x = 4.dp, y = 4.dp).size(13.dp).clip(CircleShape).background(Palette.Card),
                         contentAlignment = Alignment.Center,
-                    ) { Icon(badge, null, Modifier.size(11.dp), tint = actionColor(action.doType)) }
+                    ) { Icon(badge, null, Modifier.size(11.dp), tint = tint) }
                 }
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(f.name, fontWeight = FontWeight.SemiBold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // "3 Block Rules", "1 Bypass Rule"; the redirect location still shows as a pill.
+                    // "No Rules", "1 Bypass Rule", "3 Block Rules"; the redirect location still shows as a pill.
                     val kind = action?.let { Do.label(it.doType) + " " }.orEmpty()
-                    Text("${f.count} $kind${if (f.count == 1) "Rule" else "Rules"}", style = MaterialTheme.typography.bodySmall, color = Palette.Muted)
+                    Text(
+                        if (f.count == 0) "No Rules" else "${f.count} $kind${if (f.count == 1) "Rule" else "Rules"}",
+                        style = MaterialTheme.typography.bodySmall, color = Palette.Muted,
+                    )
                     if (action?.doType == Do.REDIRECT) { Spacer(Modifier.width(8.dp)); ActionPill(action, proxies) }
                 }
             }
