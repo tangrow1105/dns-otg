@@ -230,7 +230,9 @@ fun FolderScreen(nav: NavHostController, pid: String, fid: Int) {
         LoaderBox(loader, Modifier.padding(pad)) { (folders, rules) ->
             val shown = rules.applyView(view).filter { q.isBlank() || it.hostname.contains(q, true) || it.comment?.contains(q, true) == true }
             LazyColumn(contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                rulesList(shown, proxies.data.orEmpty(), runner, pid, session.api, onEdit = { ruleDialog = it }) { loader.reload() }
+                // In a folder with a Folder Rule, every domain shows the folder's action: that's the one that applies.
+                val enforced = folder?.action?.takeIf { it.doType >= 0 }
+                rulesList(shown, proxies.data.orEmpty(), runner, pid, session.api, enforced, onEdit = { ruleDialog = it }) { loader.reload() }
                 if (rules.isEmpty()) item { EmptyState(Solar.Rules, "This folder is empty") }
             }
             if (newRule || ruleDialog != null) {
@@ -255,13 +257,14 @@ private fun LazyListScope.rulesList(
     runner: Runner,
     pid: String,
     api: ControlDApi,
+    enforced: Action? = null,
     onEdit: (Rule) -> Unit,
     reload: () -> Unit,
 ) {
     items(rules, key = { "r_" + it.hostname }) { r ->
         var confirmDelete by remember { mutableStateOf(false) }
         RuleRow(
-            r, proxies, busy = runner.busy,
+            r, proxies, busy = runner.busy, shown = enforced?.copy(status = r.action?.status ?: 1),
             onClick = { onEdit(r) },
             onToggle = { on ->
                 val a = r.action ?: return@RuleRow
@@ -278,13 +281,13 @@ private fun LazyListScope.rulesList(
 }
 
 @Composable
-private fun RuleRow(r: Rule, proxies: List<Proxy>, busy: Boolean, onClick: () -> Unit, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
+private fun RuleRow(r: Rule, proxies: List<Proxy>, busy: Boolean, shown: Action? = null, onClick: () -> Unit, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
     CdCard(Modifier.fillMaxWidth(), onClick = onClick) {
         Row(Modifier.padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(r.hostname, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
-                ActionPill(r.action, proxies)
+                ActionPill(shown ?: r.action, proxies)
                 r.action?.ttl?.let { t ->
                     val expired = t * 1000 <= System.currentTimeMillis()
                     Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -382,17 +385,27 @@ private fun RuleEditorDialog(
     var pickLocation by remember { mutableStateOf(false) }
     var pickExpiry by remember { mutableStateOf(false) }
     val hosts = (chips + splitHosts(input)).distinct()
-    val valid = hosts.isNotEmpty() && when (doType) {
+    // A folder with a Folder Rule decides the action for every domain in it (Control D Bypass skips Control D),
+    // so its domains have no action of their own to pick; editing one is just its comment, as on the dashboard.
+    val folderRule = folders.firstOrNull { it.pk == folder }?.let { f ->
+        f.action?.takeIf { it.doType >= 0 } ?: Action(Do.BYPASS).takeIf { f.name == MAGIC_BYPASS }
+    }
+    val commentOnly = existing != null && folderRule != null
+    val valid = hosts.isNotEmpty() && (folderRule != null || when (doType) {
         Do.SPOOF -> spoofVia.isNotBlank()
         Do.REDIRECT -> redirectVia.isNotBlank()
         else -> true
-    }
+    })
 
     CdDialog(
         onDismissRequest = onDismiss,
         title = { Text(title ?: if (existing == null) "Create Rule" else "Edit Rule") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
+                if (commentOnly) {
+                    CommentField(comment) { comment = it }
+                    return@Column
+                }
                 header?.invoke(this)
                 Text("Domains, Hostnames & Geo Rules", style = MaterialTheme.typography.labelMedium, color = Palette.Muted)
                 Spacer(Modifier.height(6.dp))
@@ -445,6 +458,11 @@ private fun RuleEditorDialog(
                 if (existing == null) Text("Use *. for wildcards, e.g. *.example.com", style = MaterialTheme.typography.labelSmall, color = Palette.Muted, modifier = Modifier.padding(top = 4.dp))
 
                 Spacer(Modifier.height(14.dp))
+                if (folderRule != null) Text(
+                    if (folders.firstOrNull { it.pk == folder }?.name == MAGIC_BYPASS) "These domains skip Control D, as everything in this folder does."
+                    else "Follows the folder's rule: ${Do.label(folderRule.doType)}.",
+                    style = MaterialTheme.typography.bodySmall, color = Palette.Muted,
+                ) else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(Do.label(doType), color = actionColor(doType), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
@@ -503,6 +521,7 @@ private fun RuleEditorDialog(
                         IconButton(onClick = { ttl = if (initial?.ttl != null) -1 else null }) { Icon(Solar.Close, "Remove expiry", Modifier.size(18.dp)) }
                     }
                 }
+                }
 
                 HorizontalDivider(Modifier.padding(vertical = 14.dp), color = Palette.Outline)
                 if (existing == null) {
@@ -518,19 +537,19 @@ private fun RuleEditorDialog(
                     }
                     Spacer(Modifier.height(12.dp))
                 }
-                Row {
-                    Text("Comment", style = MaterialTheme.typography.labelMedium, color = Palette.Muted, modifier = Modifier.weight(1f))
-                    Text("${64 - comment.length} characters remaining", style = MaterialTheme.typography.labelMedium, color = Palette.Muted)
-                }
-                Spacer(Modifier.height(6.dp))
-                CdTextField(comment, { if (it.length <= 64) comment = it }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                CommentField(comment) { comment = it }
             }
         },
         confirmButton = {
             TextButton(enabled = valid, onClick = {
                 val via = when (doType) { Do.SPOOF -> spoofVia.trim(); Do.REDIRECT -> redirectVia; else -> null }
                 val v6 = spoofV6.trim().takeIf { doType == Do.SPOOF && it.isNotBlank() }
-                val action = Action(doType, via, v6, initial?.status ?: 1, ttl)
+                val action = when {
+                    // Editing in a folder with a Folder Rule only changes the comment: the domain keeps what it had.
+                    commentOnly -> initial ?: folderRule!!
+                    folderRule != null -> folderRule.copy(status = 1, ttl = null)
+                    else -> Action(doType, via, v6, initial?.status ?: 1, ttl)
+                }
                 // Empty comment on edit clears it; on create we only send when given.
                 val c = if (existing != null) comment.trim() else comment.trim().ifBlank { null }
                 onSave(if (existing != null) listOf(existing.hostname) else hosts, action, folder, c)
@@ -550,6 +569,16 @@ private fun RuleEditorDialog(
     }
     if (pickLocation) LocationPicker(proxies, redirectVia, onDismiss = { pickLocation = false }) { redirectVia = it }
     if (pickExpiry) ExpiryDialog((ttl ?: 0).takeIf { it > 0 }, onDismiss = { pickExpiry = false }) { ttl = it }
+}
+
+@Composable
+private fun CommentField(comment: String, onChange: (String) -> Unit) {
+    Row {
+        Text("Comment", style = MaterialTheme.typography.labelMedium, color = Palette.Muted, modifier = Modifier.weight(1f))
+        Text("${64 - comment.length} characters remaining", style = MaterialTheme.typography.labelMedium, color = Palette.Muted)
+    }
+    Spacer(Modifier.height(6.dp))
+    CdTextField(comment, { if (it.length <= 64) onChange(it) }, singleLine = true, modifier = Modifier.fillMaxWidth())
 }
 
 private fun splitHosts(s: String) = s.split('\n', ',', ' ').map { it.trim() }.filter { it.isNotEmpty() }
