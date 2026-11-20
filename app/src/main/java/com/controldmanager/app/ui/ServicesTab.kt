@@ -97,7 +97,7 @@ fun ServicesTab(pid: String) {
                 if (merged.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
                     EmptyState(Solar.Widget, if (selected == CONFIGURED) "No service rules yet. Pick a category to add one." else "No services found")
                 }
-                items(merged, key = { it.pk }) { s ->
+                val row: @Composable (Service) -> Unit = { s ->
                     ServiceRow(
                         s, proxies.data.orEmpty(), busy = runner.busy,
                         onClick = { editing = s },
@@ -127,6 +127,23 @@ fun ServicesTab(pid: String) {
                         },
                     )
                 }
+                if (selected == CONFIGURED) {
+                    // Configured services, one section per category (as the dashboard lists them), in one list.
+                    val order = categories.data.orEmpty()
+                    merged.groupBy { it.category }
+                        .toList()
+                        .sortedBy { (cat, _) -> order.indexOfFirst { it.pk == cat }.let { if (it < 0) Int.MAX_VALUE else it } }
+                        .forEach { (cat, inCat) ->
+                            item(span = { GridItemSpan(maxLineSpan) }, key = "h_$cat") {
+                                Text(
+                                    order.firstOrNull { it.pk == cat }?.name ?: cat.replaceFirstChar { it.uppercase() },
+                                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(top = 10.dp, bottom = 2.dp, start = 4.dp),
+                                )
+                            }
+                            items(inCat, key = { it.pk }) { s -> row(s) }
+                        }
+                } else items(merged, key = { it.pk }) { s -> row(s) }
             }
         }
     }

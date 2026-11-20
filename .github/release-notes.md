@@ -4,6 +4,7 @@
 - **Create a rule from any app:** share a link (from Chrome or anywhere) to DNS OTG, and Create Rule opens on top with the domain filled in. Pick the profile, folder and action, tap Create, and you're back where you were.
 
 ### Improved
+- Services: the Configured list is grouped by category (Audio, Gaming…), like the dashboard
 - Rule folders look like the dashboard's: a folder icon with the folder's action as a badge (Do Not Log and Control D Bypass included), and counts like "3 Block Rules" or "No Rules"
 
 ### Fixed
