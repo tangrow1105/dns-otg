@@ -7,7 +7,8 @@
 - **Remove services:** delete a service from a profile, or every service in a category, like the dashboard
 
 ### Improved
-- Endpoints: Legacy DNS is now called Do53 (DNS over port 53), as on the dashboard, and turning it off warns that its IPs are given back
+- Legacy DNS is now called Do53 (DNS over port 53) everywhere, as on the dashboard, and turning it off on an endpoint warns that its IPs are given back
+- Laptops and desktop mode (Googlebook, Chromebook): the app installs without a touchscreen, and in a window its title bar blends into the app
 - Services: the Configured list is grouped by category (Audio, Gaming…), like the dashboard
 - Rule folders look like the dashboard's: a folder icon with the folder's action as a badge (Do Not Log and Control D Bypass included), and counts like "3 Block Rules" or "No Rules"
 
