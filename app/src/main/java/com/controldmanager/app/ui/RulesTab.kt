@@ -263,6 +263,8 @@ private fun LazyListScope.rulesList(
 ) {
     items(rules, key = { "r_" + it.hostname }) { r ->
         var confirmDelete by remember { mutableStateOf(false) }
+        // Copy or move to another folder or profile: true = move.
+        var transfer by remember { mutableStateOf<Boolean?>(null) }
         RuleRow(
             r, proxies, busy = runner.busy, shown = enforced?.copy(status = r.action?.status ?: 1),
             onClick = { onEdit(r) },
@@ -270,6 +272,8 @@ private fun LazyListScope.rulesList(
                 val a = r.action ?: return@RuleRow
                 runner.run(onDone = reload) { api.modifyRules(pid, listOf(r.hostname), a.copy(status = if (on) 1 else 0), r.group, null) }
             },
+            onCopy = { transfer = false },
+            onMove = { transfer = true },
             onDelete = { confirmDelete = true },
         )
         if (confirmDelete) {
@@ -277,11 +281,15 @@ private fun LazyListScope.rulesList(
                 runner.run("Rule deleted", onDone = reload) { api.deleteRule(pid, r.hostname) }
             }
         }
+        transfer?.let { move -> TransferRuleDialog(r, pid, move, runner, onDismiss = { transfer = null }, onDone = reload) }
     }
 }
 
 @Composable
-private fun RuleRow(r: Rule, proxies: List<Proxy>, busy: Boolean, shown: Action? = null, onClick: () -> Unit, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
+private fun RuleRow(
+    r: Rule, proxies: List<Proxy>, busy: Boolean, shown: Action? = null, onClick: () -> Unit, onToggle: (Boolean) -> Unit,
+    onCopy: () -> Unit, onMove: () -> Unit, onDelete: () -> Unit,
+) {
     CdCard(Modifier.fillMaxWidth(), onClick = onClick) {
         Row(Modifier.padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -299,7 +307,17 @@ private fun RuleRow(r: Rule, proxies: List<Proxy>, busy: Boolean, shown: Action?
                 r.comment?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Palette.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             if (r.action != null) CdSwitch(r.action.enabled, onToggle, busy = busy)
-            IconButton(onClick = onDelete) { Icon(Solar.Delete, "Delete", tint = Palette.Muted) }
+            var menu by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(Solar.MoreVert, "Rule options", tint = Palette.Muted) }
+                CdMenu(menu, { menu = false }) {
+                    if (r.action != null) {
+                        CdMenuItem({ Text("Copy to…") }, { menu = false; onCopy() }, leadingIcon = { Icon(Solar.CopyAdd, null) })
+                        CdMenuItem({ Text("Move to…") }, { menu = false; onMove() }, leadingIcon = { Icon(Solar.TransferVertical, null) })
+                    }
+                    CdMenuItem({ Text("Delete", color = Palette.Red) }, { menu = false; onDelete() }, leadingIcon = { Icon(Solar.Delete, null, tint = Palette.Red) })
+                }
+            }
         }
     }
 }
@@ -576,6 +594,95 @@ private fun CommentField(comment: String, onChange: (String) -> Unit) {
     }
     Spacer(Modifier.height(6.dp))
     CdTextField(comment, { if (it.length <= 64) onChange(it) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+}
+
+/**
+ * Copies or moves [r] to a folder in this or another profile, as the dashboard's Copy Rule. A copy keeps the
+ * original; a move within the profile changes its folder, and a move to another profile creates it there first and
+ * then deletes it here, so a failed create never loses the rule.
+ */
+@Composable
+private fun TransferRuleDialog(r: Rule, pid: String, move: Boolean, runner: Runner, onDismiss: () -> Unit, onDone: () -> Unit) {
+    val session = LocalSession.current
+    val action = r.action ?: return
+    val profiles = rememberLoader { session.api.profiles() }
+    val list = profiles.data.orEmpty()
+    // A profile holds a hostname once, so a copy goes to another profile; a move starts in this one.
+    var target by remember { mutableStateOf<String?>(null) }
+    val chosen = list.firstOrNull { it.pk == target } ?: list.firstOrNull { if (move) it.pk == pid else it.pk != pid }
+    val folders = rememberLoader(chosen?.pk) { chosen?.let { runCatching { session.api.folders(it.pk) }.getOrDefault(emptyList()) } ?: emptyList() }
+    var folder by remember(chosen?.pk) { mutableIntStateOf(if (chosen?.pk == pid) r.group else 0) }
+    var pickProfile by remember { mutableStateOf(false) }
+    var pickFolder by remember { mutableStateOf(false) }
+    val sameProfile = chosen?.pk == pid
+    val unchanged = sameProfile && folder == r.group
+    val folderName = if (folder == 0) "Root Folder" else folders.data?.firstOrNull { it.pk == folder }?.name ?: "Folder"
+
+    CdDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (move) "Move rule" else "Copy rule") },
+        text = {
+            Column {
+                Text(r.hostname, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(12.dp))
+                if (profiles.error != null && list.isEmpty()) Text(profiles.error!!, color = Palette.Red)
+                CdFieldCard(onClick = { pickProfile = true }, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Solar.Tuning, null, tint = Palette.Muted)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Profile", style = MaterialTheme.typography.labelSmall, color = Palette.Muted)
+                            Text(chosen?.name ?: "Loading…")
+                        }
+                        Icon(Solar.ExpandMore, null)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                CdFieldCard(onClick = { pickFolder = true }, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Solar.Folder, null, tint = Palette.Muted)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Folder", style = MaterialTheme.typography.labelSmall, color = Palette.Muted)
+                            Text(folderName)
+                        }
+                        Icon(Solar.ExpandMore, null)
+                    }
+                }
+                if (!move && sameProfile) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("A profile has each domain once. Pick another profile, or use Move to change its folder.", color = Palette.Muted, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = chosen != null && !unchanged && (move || !sameProfile) && !runner.busy, onClick = {
+                val to = chosen ?: return@TextButton
+                runner.run((if (move) "Rule moved to " else "Rule copied to ") + to.name, onDone = onDone) {
+                    when {
+                        move && to.pk == pid -> session.api.modifyRules(pid, listOf(r.hostname), action, folder, r.comment)
+                        else -> {
+                            session.api.createRules(to.pk, listOf(r.hostname), action, folder, r.comment)
+                            if (move) session.api.deleteRule(pid, r.hostname)
+                        }
+                    }
+                }
+                onDismiss()
+            }) { Text(if (move) "Move" else "Copy") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+    if (pickProfile) {
+        PickerDialog("Profile", list, label = { it.name }, selected = { it.pk == chosen?.pk }, onDismiss = { pickProfile = false }) { target = it.pk }
+    }
+    if (pickFolder) {
+        PickerDialog(
+            "Folder", listOf<RuleFolder?>(null) + folders.data.orEmpty(),
+            label = { it?.name ?: "Root Folder" },
+            selected = { (it?.pk ?: 0) == folder },
+            onDismiss = { pickFolder = false },
+        ) { folder = it?.pk ?: 0 }
+    }
 }
 
 private fun splitHosts(s: String) = s.split('\n', ',', ' ').map { it.trim() }.filter { it.isNotEmpty() }
