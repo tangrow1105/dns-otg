@@ -24,6 +24,11 @@ import com.controldmanager.app.share.SharedHosts
 import com.controldmanager.app.ui.AppToast
 import com.controldmanager.app.ui.CdTheme
 import com.controldmanager.app.ui.CreateRuleFromLogDialog
+import com.controldmanager.app.ui.DialogHostState
+import com.controldmanager.app.ui.DialogOverlay
+import com.controldmanager.app.ui.LocalDialogHost
+import com.controldmanager.app.ui.LocalHaze
+import dev.chrisbanes.haze.hazeSource
 import com.controldmanager.app.ui.LocalSession
 import com.controldmanager.app.ui.LocalSnackbar
 import com.controldmanager.app.ui.Runner
@@ -58,15 +63,25 @@ class ShareRuleActivity : ComponentActivity() {
 
         setContent {
             CdTheme {
-                CompositionLocalProvider(LocalSession provides session, LocalSnackbar provides remember { SnackbarHostState() }) {
-                    var open by remember { mutableStateOf(true) }
-                    if (open) {
-                        CreateRuleFromLogDialog(hosts, initialProfileId = null, runner = runner, onDismiss = { open = false })
-                    } else if (runner.busy) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                // The app's own glass dialogs, here too: the panel is the same tinted glass as inside the app, and on
+                // Android 12+ the app behind it (the browser) is blurred by the system (see Theme.CDManager.Share).
+                val dialogHost = remember { DialogHostState() }
+                val haze = remember { dev.chrisbanes.haze.HazeState() }
+                CompositionLocalProvider(
+                    LocalSession provides session, LocalSnackbar provides remember { SnackbarHostState() },
+                    LocalDialogHost provides dialogHost, LocalHaze provides haze,
+                ) {
+                    Box(Modifier.fillMaxSize().hazeSource(haze)) {
+                        var open by remember { mutableStateOf(true) }
+                        if (open) {
+                            CreateRuleFromLogDialog(hosts, initialProfileId = null, runner = runner, onDismiss = { open = false })
+                        } else if (runner.busy) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                        }
+                        // Back to the app that shared once the dialog is closed and its save (if any) has finished.
+                        LaunchedEffect(open, runner.busy) { if (!open && !runner.busy) finish() }
                     }
-                    // Back to the app that shared once the dialog is closed and its save (if any) has finished.
-                    LaunchedEffect(open, runner.busy) { if (!open && !runner.busy) finish() }
+                    DialogOverlay(dialogHost, haze)
                 }
             }
         }

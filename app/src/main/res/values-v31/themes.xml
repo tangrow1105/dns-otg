@@ -1,0 +1,16 @@
+<resources>
+    <!--
+        Share target on Android 12+: the app behind (the browser that shared the link) is blurred by the system, so the
+        glass Create Rule panel sits on a frosted backdrop, like the app's own dialogs. Devices without cross-window blur,
+        or with it turned off (battery saver), just show the translucent window as before.
+    -->
+    <style name="Theme.CDManager.Share">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+        <item name="android:windowBlurBehindEnabled">true</item>
+        <item name="android:windowBlurBehindRadius">28dp</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.25</item>
+    </style>
+</resources>
