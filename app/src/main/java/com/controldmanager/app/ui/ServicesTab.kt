@@ -65,6 +65,14 @@ fun ServicesTab(pid: String) {
         configured.data = if (list.any { it.pk == s.pk }) list.map { if (it.pk == s.pk) updated else it } else list + updated
     }
 
+    // Removing takes a service off the profile (it's still in the catalog), as the dashboard's delete: off first if on.
+    suspend fun removeOne(s: Service) {
+        s.action?.takeIf { it.enabled }?.let { session.api.setService(pid, s.pk, it.copy(status = 0)) }
+        session.api.deleteService(pid, s.pk)
+        configured.data = configured.data?.filterNot { it.pk == s.pk }
+    }
+    var removingCategory by remember { mutableStateOf<Pair<String, String>?>(null) }
+
     Column {
         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         val chipsState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -100,6 +108,7 @@ fun ServicesTab(pid: String) {
                 val row: @Composable (Service) -> Unit = { s ->
                     ServiceRow(
                         s, proxies.data.orEmpty(), busy = runner.busy,
+                        onDelete = if (s.pk in configuredMap) ({ runner.run("${s.name} removed") { removeOne(s) } }) else null,
                         onClick = { editing = s },
                         onToggle = { on ->
                             val current = s.action
@@ -134,12 +143,14 @@ fun ServicesTab(pid: String) {
                         .toList()
                         .sortedBy { (cat, _) -> order.indexOfFirst { it.pk == cat }.let { if (it < 0) Int.MAX_VALUE else it } }
                         .forEach { (cat, inCat) ->
+                            val catName = order.firstOrNull { it.pk == cat }?.name ?: cat.replaceFirstChar { it.uppercase() }
                             item(span = { GridItemSpan(maxLineSpan) }, key = "h_$cat") {
-                                Text(
-                                    order.firstOrNull { it.pk == cat }?.name ?: cat.replaceFirstChar { it.uppercase() },
-                                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(top = 10.dp, bottom = 2.dp, start = 4.dp),
-                                )
+                                Row(Modifier.padding(top = 6.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(catName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                    IconButton(onClick = { removingCategory = cat to catName }, enabled = !runner.busy) {
+                                        Icon(Solar.Delete, "Remove all $catName Services", Modifier.size(20.dp), tint = Palette.Muted)
+                                    }
+                                }
                             }
                             items(inCat, key = { it.pk }) { s -> row(s) }
                         }
@@ -148,6 +159,18 @@ fun ServicesTab(pid: String) {
         }
     }
 
+    removingCategory?.let { (cat, catName) ->
+        ConfirmDialog(
+            "Remove all $catName Services from this Profile?",
+            "They're turned off and taken off this profile. You can add them back from their category.",
+            confirmLabel = "Remove all", busy = runner.busy, onDismiss = { removingCategory = null },
+        ) {
+            // One at a time, as the dashboard; the first failure stops it (the ones already removed stay removed).
+            runner.run("$catName Services removed", onDone = { removingCategory = null }) {
+                configured.data.orEmpty().filter { it.category == cat }.forEach { removeOne(it) }
+            }
+        }
+    }
     editing?.let { s ->
         RedirectSpoofDialog(
             title = s.name,
@@ -165,6 +188,8 @@ private fun ServiceRow(
     s: Service,
     proxies: List<Proxy>,
     busy: Boolean,
+    /** Shown for services on the profile: removes it from the profile. */
+    onDelete: (() -> Unit)? = null,
     onClick: () -> Unit,
     onToggle: (Boolean) -> Unit,
     onPick: (Int) -> Unit,
@@ -180,7 +205,8 @@ private fun ServiceRow(
                     Spacer(Modifier.height(2.dp))
                     ActionPill(s.action, proxies)
                 }
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(4.dp))
+                onDelete?.let { del -> IconButton(onClick = del, enabled = !busy) { Icon(Solar.Delete, "Delete Service", tint = Palette.Muted) } }
                 CdSwitch(on, onToggle, busy = busy)
             }
             Spacer(Modifier.height(10.dp))

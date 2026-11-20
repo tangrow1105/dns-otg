@@ -551,6 +551,44 @@ class ControlDApi(private val token: String, private val orgId: String?) {
     suspend fun profileServices(profileId: String): List<Service> =
         call("GET", "/profiles/$profileId/services").optJSONArray("services").objects().map(::parseService)
 
+    /** Removes a service from the profile (it stays in the catalog, to add back); the dashboard turns it off first. */
+    suspend fun deleteService(profileId: String, service: String) {
+        call("DELETE", "/profiles/$profileId/services/$service")
+    }
+
+    // ---------- Filter preview (the analytics server's simulation, as the dashboard's Preview) ----------
+
+    /** Filter ids the analytics server can preview, or an empty set when it offers no previews. */
+    suspend fun previewableFilters(region: String): Set<String> {
+        val b = request("GET", "https://$region.analytics.controld.com/v2/capabilities")
+        if (b.optJSONObject("features")?.optBoolean("simulation") != true) return emptySet()
+        return b.optJSONObject("simulation")?.optJSONArray("filters").strings().toSet()
+    }
+
+    /**
+     * What [change] would have done to this profile's logged traffic over [range]: the queries it would newly block
+     * (or allow), all queries for the share, and the top 100 domains affected. An estimate from Full Analytics logs.
+     */
+    suspend fun previewFilterChange(region: String, profileId: String, change: FilterChange, range: TimeRange): FilterPreview =
+        kotlinx.coroutines.coroutineScope {
+            val base = "https://$region.analytics.controld.com/v2/simulation"
+            fun body(view: String, withChange: Boolean) = JSONObject()
+                .put("view", view).put("startTime", range.startIso).put("endTime", range.endIso)
+                .put("profileIds", org.json.JSONArray(listOf(profileId)))
+                .put("filters", JSONObject().apply {
+                    if (withChange && change.enable.isNotEmpty()) put("enable", org.json.JSONArray(change.enable))
+                    if (withChange && change.disable.isNotEmpty()) put("disable", org.json.JSONArray(change.disable))
+                })
+                .apply { if (withChange) put("actions", org.json.JSONArray(listOf(if (change.blocksMore) 0 else 1))) }
+            val impact = async { request("POST", "$base/count", json = body("impact", true)).optLong("count") }
+            val actual = async { request("POST", "$base/count", json = body("actual", false)).optLong("count") }
+            val domains = async {
+                request("POST", "$base/count/question", json = body("impact", true).put("limit", 100).put("sortOrder", "desc"))
+                    .optJSONArray("counts").objects().map { CountItem(it.optString("value"), it.optLong("count")) }
+            }
+            FilterPreview(impact.await(), actual.await(), domains.await())
+        }
+
     suspend fun setService(profileId: String, service: String, action: Action) {
         call("PUT", "/profiles/$profileId/services/$service", actionForm(action))
     }
